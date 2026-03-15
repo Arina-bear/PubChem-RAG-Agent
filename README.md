@@ -17,7 +17,8 @@
 
 ## 🛠 Технологический стек
 
-*   **LangChain:** 
+*   **LangChain:**
+*   **Docker**
 *   **Python: >=3.10**
 *   **Langfuse**
 *   **Redis**
