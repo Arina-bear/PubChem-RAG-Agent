@@ -1,0 +1,96 @@
+services:
+ postgres:
+  image: postgres:15-alpine
+  container_name: pubchem-postgres
+  environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      APP_DB: ${APP_DB}
+
+  volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgresql-init:/docker-entrypoint-initdb.d
+  healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+  networks:
+      - pubchem-network
+  ports:
+      - "5432:5432"
+ api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: pubchem-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # ollama:
+      #   condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${APP_DB}
+      OLLAMA_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
+      PORT: 8000
+    ports:
+      - "${API_PORT}:8000"
+    volumes:
+      -  ./services:/app/services:ro #см
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s  # Give it 2 minutes grace period while dependencies start
+    networks:
+      - pubchem-network
+
+ ollama:
+    image: ollama/ollama:latest
+    container_name: pubchem-ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:11434/api/tags || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    deploy:
+     resources:
+      limits:
+        memory: 3G  
+      reservations:
+        memory: 1G
+    networks:
+      - pubchem-network
+
+ ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: pubchem-ui
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "${UI_PORT}:7860"
+    networks:
+      - pubchem-network
+
+volumes:
+  pgdata:
+  ollama_data:
+
+networks:
+    pubchem-network:
+      driver: bridge
