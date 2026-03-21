@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Copy services directory for embedder and search
-COPY ../../services /opt/researchai/services
+#COPY ../../services /opt/researchai/services
 
 EXPOSE 8000
 

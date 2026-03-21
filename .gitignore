@@ -1,0 +1,88 @@
+# ========== Python ==========
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+
+venv/
+venv*/
+.env/
+.env.*
+.envrc
+!.env.example
+
+# ========== IDE ==========
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+
+data/
+chroma_data/
+ollama_data/
+pgdata/
+*.db
+*.sqlite
+*.sqlite3
+
+# ========== log ==========
+logs/
+*.log
+
+# ========== Docker ==========
+.dockerignore
+Dockerfile
+docker-compose*.yml
+
+# ========== test ==========
+tests/
+test_*.py
+*_test.py
+
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# ========== env ==========
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ========== doc ==========
+docs/
+*.md
+!README.md
+!README.*.md
+
+# ========== req ==========
+*.txt
+!requirements.txt
+!requirements-dev.txt
+
+# ========== images ==========
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+!assets/*.png
+!docs/*.png
+
+# ========== other ==========
+*.pkl
+*.mp4
+*.csv
+*.pdf
+!data/sample.csv

@@ -5,9 +5,7 @@ services:
   environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-postgres}
       APP_DB: ${APP_DB}
-
   volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgresql-init:/docker-entrypoint-initdb.d
@@ -22,14 +20,14 @@ services:
       - "5432:5432"
  api:
     build:
-      context: .
-      dockerfile: Dockerfile.api
+      context: ./docker/api
+      dockerfile: Dockerfile
     container_name: pubchem-api
     depends_on:
       postgres:
         condition: service_healthy
-      # ollama:
-      #   condition: service_healthy
+      ollama:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${APP_DB}
       OLLAMA_URL: http://ollama:11434
