@@ -33,7 +33,7 @@
 ### Инструкция по установке репозитория
 
 
-
+## Troubleshooting
 ## 👥 Команда разработки
 *   [Арина Зеркалова](https://github.com/Arina-bear) - Роль (ML-Engineer)
 *   [Софья Поселенова](https://github.com/cakepll123-lang)- Роль (ML-Engineer)
