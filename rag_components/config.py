@@ -21,3 +21,11 @@ class RAGConfig:
     """Context extraction mode: 'page' for page-based, 'chunk' for chunk-based."""
 
     max_context_tokens: int = field(default=get_env_value("MAX_CONTEXT_TOKENS", 1500, int))
+
+    chunk_overlap: int = field(default=get_env_value("CHUNK_OVERLAP",2, int))
+
+    chunk_size: int = field(default=get_env_value("CHUNK_SIZE",2, int))
+
+    top_k: int = field(default=get_env_value("TOP_K",3, int))
+
+
