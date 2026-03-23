@@ -20,7 +20,7 @@ services:
       - "5432:5432"
  api:
     build:
-      context: ./PubChem-RAG-Agent/docker/api
+      context: ./docker/api
       dockerfile: Dockerfile
     container_name: pubchem-api
     depends_on:
@@ -46,7 +46,7 @@ services:
     networks:
       - pubchem-network
 
- ollama:
+ ollama: #генерация ответа
     image: ollama/ollama:latest
     container_name: pubchem-ollama
     environment:
@@ -84,10 +84,30 @@ services:
       - "${UI_PORT}:7860"
     networks:
       - pubchem-network
+ prometheus:
+  image: prom/prometheus
+  container_name: pubchem-prometheus
+  ports:
+    - "9090:9090"
+  volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    - prometheus_data:/prometheus
+
+ grafana:
+  image: grafana/grafana
+  container_name: pubchem-grafana
+  ports:
+    - "3000:3000"
+  volumes:
+    - grafana_data:/var/lib/grafana
+  depends_on:
+    - prometheus
 
 volumes:
   pgdata:
   ollama_data:
+  grafana_data:    
+  prometheus_data:
 
 networks:
     pubchem-network:
