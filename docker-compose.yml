@@ -20,7 +20,7 @@ services:
       - "5432:5432"
  api:
     build:
-      context: ./docker/api
+      context: ./PubChem-RAG-Agent/docker/api
       dockerfile: Dockerfile
     container_name: pubchem-api
     depends_on:
