@@ -1,0 +1,9 @@
+.git
+.gitignore
+.next
+.bun-cache
+node_modules
+coverage
+dist
+*.log
+.DS_Store

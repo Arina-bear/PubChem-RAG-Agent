@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f5f0e7;
+  --bg-accent: #dce9df;
+  --surface: rgba(255, 251, 247, 0.86);
+  --surface-muted: rgba(248, 242, 234, 0.92);
+  --border-soft: rgba(56, 63, 58, 0.08);
+  --border-strong: rgba(40, 48, 44, 0.14);
+  --ink: #151917;
+  --ink-soft: #4f5a54;
+  --ink-muted: #7b877f;
+  --accent: #1d6b58;
+  --accent-strong: #0f5a49;
+  --ring: rgba(29, 107, 88, 0.16);
+  --danger: #aa4a2f;
+  --code-bg: #0d1512;
+  --code-ink: #d4e4da;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(217, 160, 102, 0.28), transparent 24rem),
+    radial-gradient(circle at top right, rgba(80, 136, 114, 0.2), transparent 26rem),
+    linear-gradient(180deg, var(--bg-accent) 0%, var(--bg) 55%, #f8f4ee 100%);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background-image:
+    linear-gradient(rgba(17, 25, 22, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 25, 22, 0.03) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: rgba(29, 107, 88, 0.2);
+}
+
