@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y \
 
 COPY requirements.txt .
 
-RUN pip config set global.timeout 100 && \
-    pip install --no-cache-dir -r requirements.txt
+RUN RUN pip install --no-cache-dir --timeout 100 \
+    -i https://mirror.yandex.ru/pypi/simple/ \
+    -r requirements.txt
 
 COPY . .
 

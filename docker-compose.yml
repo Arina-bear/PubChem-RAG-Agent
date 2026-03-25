@@ -84,6 +84,8 @@ services:
       - "${UI_PORT}:7860"
     networks:
       - pubchem-network
+
+      
  prometheus:
   image: prom/prometheus
   container_name: prometheus
