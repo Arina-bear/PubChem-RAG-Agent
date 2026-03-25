@@ -1,7 +1,7 @@
 services:
  postgres:
   image: postgres:15-alpine
-  container_name: pubchem-postgres
+  container_name: postgres
   environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -22,7 +22,7 @@ services:
     build:
       context: ./docker/api
       dockerfile: Dockerfile
-    container_name: pubchem-api
+    container_name: api
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,7 +31,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${APP_DB}
       OLLAMA_URL: http://ollama:11434
-      LLM_MODEL: ${LLM_MODEL:-llama3.2:1b}
+      LLM_MODEL: ${LLM_MODEL}
       PORT: 8000
     ports:
       - "${API_PORT}:8000"
@@ -48,7 +48,7 @@ services:
 
  ollama: #генерация ответа
     image: ollama/ollama:latest
-    container_name: pubchem-ollama
+    container_name: ollama
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
     ports:
@@ -72,9 +72,9 @@ services:
 
  ui:
     build:
-      context: .
+      context: ./docker/ui
       dockerfile: Dockerfile.ui
-    container_name: pubchem-ui
+    container_name: ui
     depends_on:
       api:
         condition: service_healthy
@@ -86,7 +86,7 @@ services:
       - pubchem-network
  prometheus:
   image: prom/prometheus
-  container_name: pubchem-prometheus
+  container_name: prometheus
   ports:
     - "9090:9090"
   volumes:
@@ -95,7 +95,10 @@ services:
 
  grafana:
   image: grafana/grafana
-  container_name: pubchem-grafana
+  container_name: grafana
+  environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
   ports:
     - "3000:3000"
   volumes:
