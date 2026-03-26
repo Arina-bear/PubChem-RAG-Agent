@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: ../backend
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: development
+      QUERY_RATE_LIMIT_PER_SECOND: 3
+
+  web:
+    build:
+      context: ../frontend
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    environment:
+      BACKEND_BASE_URL: http://api:8000
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
