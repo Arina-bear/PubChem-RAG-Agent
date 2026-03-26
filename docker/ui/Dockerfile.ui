@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    python3-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+RUN pip config set global.timeout 100 && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+#COPY services /app/services
+
+# Copy services directory for embedder and search
+#COPY ../../services /opt/researchai/services
+
+EXPOSE 8000
+
+# Run the application
+CMD ["uvicorn", "main:api", "--host", "0.0.0.0", "--port", "8000"]
