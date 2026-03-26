@@ -5,16 +5,17 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    python3-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 
-RUN RUN pip install --no-cache-dir --timeout 100 \
-    -i https://mirror.yandex.ru/pypi/simple/ \
-    -r requirements.txt
+RUN pip config set global.timeout 100 && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+#COPY services /app/services
 
 # Copy services directory for embedder and search
 #COPY ../../services /opt/researchai/services
