@@ -2,7 +2,7 @@ from enum import Enum, auto
 from abc import ABC, abstractmethod
 from typing import List
 import re
-
+#from loguru import logger
 
 class QueryType(Enum):
     """
@@ -10,6 +10,7 @@ class QueryType(Enum):
     """
     SIMPLE = auto()
     COMPLEX = auto()
+    NONTYPE=auto()
 
 
 class RoutingStrategy(ABC):
@@ -28,57 +29,58 @@ class SimpleKeywordStrategy(RoutingStrategy):
     """
 
     SIMPLE_KEYWORDS: List[str] = [
-        "сколько",
-        "масса",
-        "вес",
-        "сколько атомов",
-        "молекулярная масса",
-        "формула",
-        "найди массу",
-        "найди формулу"
+    "how much",
+    "mass",
+    "weight",
+    "how many atoms",
+    "molecular mass",
+    "formula",
+    "find the mass",
+    "find the formula"
     ]
 
     COMPLEX_KEYWORDS: List[str] = [
-        "как работает",
-        "механизм",
-        "объясни",
-        "опиши",
-        "почему",
-        "сравни",
-        "каким образом",
-        "влияние",
-        "взаимодействие"
+        "how it works",
+        "mechanism",
+        "explain",
+        "describe",
+        "why",
+        "compare",
+        "how",
+        "influence",
+        "interaction"
     ]
 
-    MAX_SIMPLE_LENGTH: int = 60
+    MAX_SIMPLE_LENGTH: int = 30
 
-    def normalize(self, query: str) -> str:
+    def clear_question(self, query: str) -> str:
         """
         Normalize text before classification
         """
         query = query.lower()
         query = re.sub(r"\s+", " ", query)
         return query.strip()
-
+    
+    def _is_short_query(self, query: str) -> bool:
+        """Check if query is short (≤ MAX_SIMPLE_LENGTH)"""
+        return len(query) <= self.MAX_SIMPLE_LENGTH
+   
     def route_query(self, query: str) -> QueryType:
-        query = self.normalize(query)
 
-        # Check complex keywords first
-        for keyword in self.COMPLEX_KEYWORDS:
-            if keyword in query:
-                return QueryType.COMPLEX
+        query_lower = self.clear_question(query)
 
-        # Check simple keywords
-        for keyword in self.SIMPLE_KEYWORDS:
-            if keyword in query:
+        if self._is_short_query(query_lower):
+            return QueryType.SIMPLE
+         
+        for keyword in sorted(self.SIMPLE_KEYWORDS, key=len, reverse=True):
+            if keyword in query_lower:
                 return QueryType.SIMPLE
-
-        # Fallback to length heuristic
-        if len(query) > self.MAX_SIMPLE_LENGTH:
-            return QueryType.COMPLEX
-
-        return QueryType.SIMPLE
-
+            
+        for keyword in sorted(self.COMPLEX_KEYWORDS, key=len, reverse=True):
+            if keyword in query_lower:
+                return QueryType.COMPLEX
+    
+        return QueryType.NONTYPE
 
 class QueryRouter:
     """
