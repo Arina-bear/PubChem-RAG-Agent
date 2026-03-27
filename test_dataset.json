@@ -1,0 +1,142 @@
+[
+  {
+    "user_query": "aspirin",
+    "parsed_intent": "find_compound_by_name",
+    "expected_compound": "Aspirin",
+    "filters": {},
+    "difficulty": "easy"
+  },
+  {
+    "user_query": "compound with almond smell",
+    "parsed_intent": "find_compound_by_property",
+    "expected_compound": "Benzaldehyde",
+    "filters": { "odor": "almond" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "paracetamol",
+    "parsed_intent": "find_compound_by_name",
+    "expected_compound": "Paracetamol",
+    "filters": {},
+    "difficulty": "easy"
+  },
+  {
+    "user_query": "painkiller with carboxylic acid group",
+    "parsed_intent": "find_compound_by_function_and_group",
+    "expected_compound": "Ibuprofen",
+    "filters": { "function": "painkiller", "functional_group": "carboxylic acid" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "antibiotic with MW ~350 and aromatic ring",
+    "parsed_intent": "find_compound_by_function_structure_mw",
+    "expected_compound": "Chloramphenicol",
+    "filters": { "function": "antibiotic", "molecular_weight": "~350", "structure": "aromatic ring" },
+    "difficulty": "hard"
+  },
+  {
+    "user_query": "molecule used to detect starch",
+    "parsed_intent": "find_compound_by_use",
+    "expected_compound": "Iodine",
+    "filters": { "use": "detect starch" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "sweetest natural sugar",
+    "parsed_intent": "find_compound_by_superlative_property",
+    "expected_compound": "Fructose",
+    "filters": { "sweetness_rank": 1, "type": "natural sugar" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "NSAID with lowest gastric side effects",
+    "parsed_intent": "find_compound_by_type_and_side_effect",
+    "expected_compound": "Celecoxib",
+    "filters": { "type": "NSAID", "side_effect": "low gastric" },
+    "difficulty": "hard"
+  },
+  {
+    "user_query": "molecule forming vitamin C",
+    "parsed_intent": "find_compound_by_biological_role",
+    "expected_compound": "Ascorbic acid",
+    "filters": { "role": "vitamin C" },
+    "difficulty": "easy"
+  },
+  {
+    "user_query": "common estrogen",
+    "parsed_intent": "find_compound_by_hormone_type",
+    "expected_compound": "Estradiol",
+    "filters": { "hormone_type": "estrogen" },
+    "difficulty": "easy"
+  },
+  {
+    "user_query": "antimalarial containing quinoline ring",
+    "parsed_intent": "find_compound_by_function_and_structure",
+    "expected_compound": "Chloroquine",
+    "filters": { "function": "antimalarial", "structure": "quinoline ring" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "metal ion chelator for lead poisoning",
+    "parsed_intent": "find_compound_by_function",
+    "expected_compound": "EDTA",
+    "filters": { "function": "chelator", "target": "lead" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "major neurotransmitter derived from tyrosine",
+    "parsed_intent": "find_compound_by_biological_origin",
+    "expected_compound": "Dopamine",
+    "filters": { "origin": "tyrosine", "type": "neurotransmitter" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "organic acid in vinegar",
+    "parsed_intent": "find_compound_by_occurrence",
+    "expected_compound": "Acetic acid",
+    "filters": { "occurrence": "vinegar", "type": "organic acid" },
+    "difficulty": "easy"
+  },
+  {
+    "user_query": "largest natural amino acid",
+    "parsed_intent": "find_compound_by_superlative_biological_property",
+    "expected_compound": "Tryptophan",
+    "filters": { "type": "amino acid", "size": "largest" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "fluorescent dye for DNA staining",
+    "parsed_intent": "find_compound_by_use",
+    "expected_compound": "Ethidium bromide",
+    "filters": { "use": "DNA staining", "property": "fluorescent" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "sweetener with zero calories",
+    "parsed_intent": "find_compound_by_property",
+    "expected_compound": "Sucralose",
+    "filters": { "property": "zero calorie", "type": "sweetener" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "compound in chocolate responsible for bitter taste",
+    "parsed_intent": "find_compound_by_occurrence_and_property",
+    "expected_compound": "Theobromine",
+    "filters": { "occurrence": "chocolate", "property": "bitter" },
+    "difficulty": "medium"
+  },
+  {
+    "user_query": "steroid hormone regulating salt balance",
+    "parsed_intent": "find_compound_by_biological_function",
+    "expected_compound": "Aldosterone",
+    "filters": { "function": "regulate salt balance", "type": "steroid hormone" },
+    "difficulty": "hard"
+  },
+  {
+    "user_query": "volatile compound in garlic with sulfur",
+    "parsed_intent": "find_compound_by_occurrence_and_element",
+    "expected_compound": "Allicin",
+    "filters": { "occurrence": "garlic", "element": "sulfur", "property": "volatile" },
+    "difficulty": "medium"
+  }
+]

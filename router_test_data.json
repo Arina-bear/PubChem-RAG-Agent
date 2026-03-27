@@ -1,0 +1,62 @@
+[
+    {
+      "query": "Сколько атомов в аспирине",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Молекулярная масса кофеина",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Формула бензола",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Сколько весит ибупрофен",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Найди массу ацетона",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Опиши механизм действия аспирина",
+      "expected": "COMPLEX"
+    },
+    {
+      "query": "Как работает ибупрофен",
+      "expected": "COMPLEX"
+    },
+    {
+      "query": "Почему ацетон растворяет пластик",
+      "expected": "COMPLEX"
+    },
+    {
+      "query": "Объясни механизм действия кофеина",
+      "expected": "COMPLEX"
+    },
+    {
+      "query": "Как взаимодействует этанол с водой",
+      "expected": "COMPLEX"
+    },
+    {
+      "query": "Масса бензола",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Сколько атомов в молекуле воды",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Как влияет температура на растворимость",
+      "expected": "COMPLEX"
+    },
+    {
+      "query": "Формула ацетона",
+      "expected": "SIMPLE"
+    },
+    {
+      "query": "Опиши свойства бензола",
+      "expected": "COMPLEX"
+    }
+  ]
