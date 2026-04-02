@@ -1,3 +1,5 @@
+import anyio
+
 from app.config import Settings
 from app.schemas.query import ManualQuerySpec
 from app.services.query_service import QueryService
@@ -48,28 +50,37 @@ class FakeAdapter:
         }
 
 
-async def test_query_service_resolves_name_to_primary_result() -> None:
-    service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
-    response = await service.execute(ManualQuerySpec(input_mode="name", identifier="aspirin", operation="property"))
+def test_query_service_resolves_name_to_primary_result() -> None:
+    async def run() -> None:
+        service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
+        response = await service.execute(ManualQuerySpec(input_mode="name", identifier="aspirin", operation="property"))
 
-    assert response.normalized is not None
-    assert response.normalized.primary_result is not None
-    assert response.normalized.primary_result.cid == 2244
-    assert response.normalized.synonyms[0] == "Aspirin"
-    assert len(response.normalized.matches) == 2
+        assert response.normalized is not None
+        assert response.normalized.primary_result is not None
+        assert response.normalized.primary_result.cid == 2244
+        assert response.normalized.synonyms[0] == "Aspirin"
+        assert len(response.normalized.matches) == 2
 
-
-async def test_query_service_uses_synonyms_tab_hint_for_synonym_operation() -> None:
-    service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
-    response = await service.execute(ManualQuerySpec(input_mode="cid", identifier="2244", operation="synonyms"))
-
-    assert response.presentation_hints.active_tab == "synonyms"
+    anyio.run(run)
 
 
-async def test_query_service_accepts_formula_queries_in_typed_backend() -> None:
-    service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
-    response = await service.execute(ManualQuerySpec(input_mode="formula", identifier="C9H8O4", operation="property"))
+def test_query_service_uses_synonyms_tab_hint_for_synonym_operation() -> None:
+    async def run() -> None:
+        service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
+        response = await service.execute(ManualQuerySpec(input_mode="cid", identifier="2244", operation="synonyms"))
 
-    assert response.normalized is not None
-    assert response.normalized.primary_result is not None
-    assert response.normalized.primary_result.cid == 2244
+        assert response.presentation_hints.active_tab == "synonyms"
+
+    anyio.run(run)
+
+
+def test_query_service_accepts_formula_queries_in_typed_backend() -> None:
+    async def run() -> None:
+        service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
+        response = await service.execute(ManualQuerySpec(input_mode="formula", identifier="C9H8O4", operation="property"))
+
+        assert response.normalized is not None
+        assert response.normalized.primary_result is not None
+        assert response.normalized.primary_result.cid == 2244
+
+    anyio.run(run)

@@ -6,13 +6,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.routes.agent import router as agent_router
 from app.api.routes.health import router as health_router
 from app.api.routes.interpret import router as interpret_router
 from app.api.routes.query import router as query_router
 from app.config import get_settings
 from app.container import AppContainer, build_container
 from app.errors.models import AppError, ErrorCode
-from app.errors.normalizer import build_interpret_error_response, build_query_error_response, unknown_error
+from app.errors.normalizer import build_agent_error_response, build_interpret_error_response, build_query_error_response, unknown_error
 
 
 def create_app(container_override: AppContainer | None = None) -> FastAPI:
@@ -62,6 +63,8 @@ def create_app(container_override: AppContainer | None = None) -> FastAPI:
         )
         if request.url.path.endswith("/api/interpret"):
             return build_interpret_error_response(trace_id=request.state.trace_id, error=app_error)
+        if request.url.path.endswith("/api/agent"):
+            return build_agent_error_response(trace_id=request.state.trace_id, error=app_error)
         return build_query_error_response(trace_id=request.state.trace_id, error=app_error)
 
     @app.exception_handler(Exception)
@@ -69,6 +72,8 @@ def create_app(container_override: AppContainer | None = None) -> FastAPI:
         app_error = exc if isinstance(exc, AppError) else unknown_error()
         if request.url.path.endswith("/api/interpret"):
             return build_interpret_error_response(trace_id=request.state.trace_id, error=app_error)
+        if request.url.path.endswith("/api/agent"):
+            return build_agent_error_response(trace_id=request.state.trace_id, error=app_error)
         if request.url.path.endswith("/api/query"):
             return build_query_error_response(trace_id=request.state.trace_id, error=app_error)
         return JSONResponse(
@@ -86,6 +91,7 @@ def create_app(container_override: AppContainer | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(query_router)
     app.include_router(interpret_router)
+    app.include_router(agent_router)
     return app
 
 

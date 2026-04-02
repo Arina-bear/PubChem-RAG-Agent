@@ -1,4 +1,6 @@
 import type {
+  AgentRequest,
+  AgentResponseEnvelope,
   ApiRequestResult,
   InterpretRequest,
   InterpretResponseEnvelope,
@@ -34,6 +36,10 @@ export function interpretText(payload: InterpretRequest): Promise<ApiRequestResu
   return postJson<InterpretResponseEnvelope>("/api/interpret", payload);
 }
 
+export function runAgent(payload: AgentRequest): Promise<ApiRequestResult<AgentResponseEnvelope>> {
+  return postJson<AgentResponseEnvelope>("/api/agent", payload);
+}
+
 export function buildQueryCurl(spec: ManualQuerySpec): string {
   return [
     "curl -X POST",
@@ -49,5 +55,14 @@ export function buildInterpretCurl(text: string): string {
     `${CURL_BASE_URL}/api/interpret`,
     "-H 'Content-Type: application/json'",
     `-d '${JSON.stringify({ text })}'`,
+  ].join(" ");
+}
+
+export function buildAgentCurl(payload: AgentRequest): string {
+  return [
+    "curl -X POST",
+    `${CURL_BASE_URL}/api/agent`,
+    "-H 'Content-Type: application/json'",
+    `-d '${JSON.stringify(payload)}'`,
   ].join(" ");
 }

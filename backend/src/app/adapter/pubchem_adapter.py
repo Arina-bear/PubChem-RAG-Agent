@@ -46,6 +46,50 @@ class PubChemAdapter:
         await self.cache.set(cache_key, deduplicated, ttl_seconds=1800)
         return deduplicated[:limit]
 
+    async def resolve_cids_by_mass_range(
+        self,
+        *,
+        min_mass: float,
+        max_mass: float,
+        mass_type: str = "molecular_weight",
+        limit: int,
+    ) -> list[int]:
+        supported_mass_types = {"molecular_weight", "exact_mass", "monoisotopic_mass"}
+        if mass_type not in supported_mass_types:
+            raise AppError(
+                ErrorCode.UNSUPPORTED_QUERY,
+                f"Mass type '{mass_type}' не поддерживается. Используйте molecular_weight, exact_mass или monoisotopic_mass.",
+                http_status=400,
+            )
+
+        if min_mass > max_mass:
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                "Нижняя граница массы не может быть больше верхней.",
+                http_status=400,
+            )
+
+        cache_key = f"resolve:{mass_type}:{min_mass}:{max_mass}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return list(cached)[:limit]  # type: ignore[arg-type]
+
+        payload = await self.transport.request_json(
+            f"/compound/{mass_type}/range/{min_mass}/{max_mass}/cids/JSON",
+            params={"MaxRecords": limit},
+        )
+        cids = payload.get("IdentifierList", {}).get("CID", [])
+        deduplicated = list(dict.fromkeys(int(cid) for cid in cids))
+        if not deduplicated:
+            raise AppError(
+                ErrorCode.NO_MATCH,
+                "PubChem не нашёл совпадений в заданном диапазоне массы.",
+                http_status=404,
+            )
+
+        await self.cache.set(cache_key, deduplicated, ttl_seconds=1800)
+        return deduplicated[:limit]
+
     async def _resolve_with_pubchempy(self, input_mode: str, identifier: str) -> list[int]:
         if input_mode not in {"name", "smiles", "inchikey"}:
             return []

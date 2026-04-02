@@ -3,31 +3,39 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { AgentResultPanel } from "@/components/agent-result-panel";
 import { AgentQueryForm } from "@/components/agent-query-form";
 import { ManualQueryForm } from "@/components/manual-query-form";
 import { ResultPanel } from "@/components/result-panel";
-import { interpretText, runQuery } from "@/lib/api";
-import type { InterpretResponseEnvelope, ManualQuerySpec, QueryResponseEnvelope } from "@/lib/types";
+import { runAgent, runQuery } from "@/lib/api";
+import type { AgentRequest, AgentResponseEnvelope, ManualQuerySpec, QueryResponseEnvelope } from "@/lib/types";
 
 type ExplorerMode = "manual" | "agent";
 
 export function ExplorerShell() {
-  const [mode, setMode] = useState<ExplorerMode>("manual");
+  const [mode, setMode] = useState<ExplorerMode>("agent");
   const [queryResult, setQueryResult] = useState<QueryResponseEnvelope | null>(null);
-  const [interpretResult, setInterpretResult] = useState<InterpretResponseEnvelope | null>(null);
   const [lastQuerySpec, setLastQuerySpec] = useState<ManualQuerySpec | null>(null);
+  const [agentResult, setAgentResult] = useState<AgentResponseEnvelope | null>(null);
+  const [lastAgentRequest, setLastAgentRequest] = useState<AgentRequest | null>(null);
 
   const queryMutation = useMutation({
     mutationFn: runQuery,
+    onMutate: () => {
+      setQueryResult(null);
+    },
     onSuccess: (response) => {
       setQueryResult(response.data);
     },
   });
 
-  const interpretMutation = useMutation({
-    mutationFn: interpretText,
+  const agentMutation = useMutation({
+    mutationFn: runAgent,
+    onMutate: () => {
+      setAgentResult(null);
+    },
     onSuccess: (response) => {
-      setInterpretResult(response.data);
+      setAgentResult(response.data);
     },
   });
 
@@ -36,13 +44,9 @@ export function ExplorerShell() {
     queryMutation.mutate(spec);
   };
 
-  const handleInterpret = (text: string) => {
-    interpretMutation.mutate({ text });
-  };
-
-  const handleRunCandidate = (spec: ManualQuerySpec) => {
-    setLastQuerySpec(spec);
-    queryMutation.mutate(spec);
+  const handleAgentSubmit = (request: AgentRequest) => {
+    setLastAgentRequest(request);
+    agentMutation.mutate(request);
   };
 
   return (
@@ -52,11 +56,11 @@ export function ExplorerShell() {
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.26em] text-[var(--muted)]">PubChem Compound Explorer</p>
             <h1 className="mt-3 max-w-4xl text-4xl font-semibold leading-tight md:text-5xl">
-              Поиск соединений в PubChem с ручным и агентным режимами
+              Natural-language поиск соединений в PubChem через AI-агента и точные tools
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[var(--muted)] md:text-base">
-              В первой версии мы держим один надёжный сценарий: ручной запрос и агент, который сначала предлагает
-              структурированный запрос, а уже потом запускает его через backend. Браузер не обращается к PubChem напрямую.
+              Теперь агентный режим принимает естественный язык, сам извлекает признаки, выбирает PubChem tools и
+              возвращает объяснимый результат: ответ, кандидаты, trace вызванных инструментов и машинный разбор запроса.
             </p>
           </div>
 
@@ -88,26 +92,38 @@ export function ExplorerShell() {
           {mode === "manual" ? (
             <ManualQueryForm isLoading={queryMutation.isPending} onSubmit={handleManualSubmit} />
           ) : (
-            <AgentQueryForm
-              interpretResult={interpretResult}
-              isLoading={interpretMutation.isPending}
-              isRunningCandidate={queryMutation.isPending}
-              onInterpret={handleInterpret}
-              onRunCandidate={handleRunCandidate}
-            />
+            <AgentQueryForm isLoading={agentMutation.isPending} onSubmit={handleAgentSubmit} />
           )}
 
           <section className="glass-panel rounded-[28px] p-6">
             <p className="text-xs font-medium uppercase tracking-[0.24em] text-[var(--muted)]">Как это работает</p>
             <div className="mt-4 space-y-3 text-sm leading-6 text-[var(--muted)]">
-              <p>Ручной режим сразу отправляет типизированный запрос.</p>
-              <p>Агентный режим сначала строит варианты запроса и ждёт явного подтверждения.</p>
-              <p>Все обращения к PubChem проходят через backend.</p>
+              {mode === "agent" ? (
+                <>
+                  <p>Пользователь пишет на естественном языке, а агент сначала выделяет химические признаки из текста.</p>
+                  <p>Дальше LLM сама выбирает нужные tools для PubChem и строит ответ с объяснением пути поиска.</p>
+                  <p>Во фронтенде доступны parsed intent, tool trace, найденные соединения и сырой JSON для отладки.</p>
+                </>
+              ) : (
+                <>
+                  <p>Ручной режим отправляет типизированный запрос прямо в backend без LLM-агента.</p>
+                  <p>Этот путь полезен для точного поиска по `name`, `cid` или `smiles` и для проверки API-контракта.</p>
+                  <p>Все обращения к PubChem и любым LLM проходят через backend, браузер не ходит наружу напрямую.</p>
+                </>
+              )}
             </div>
           </section>
         </div>
 
-        <ResultPanel isLoading={queryMutation.isPending} lastQuerySpec={lastQuerySpec} queryResult={queryResult} />
+        {mode === "manual" ? (
+          <ResultPanel isLoading={queryMutation.isPending} lastQuerySpec={lastQuerySpec} queryResult={queryResult} />
+        ) : (
+          <AgentResultPanel
+            agentResult={agentResult}
+            isLoading={agentMutation.isPending}
+            lastRequest={lastAgentRequest}
+          />
+        )}
       </section>
     </main>
   );

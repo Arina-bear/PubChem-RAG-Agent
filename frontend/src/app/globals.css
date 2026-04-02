@@ -16,6 +16,12 @@
   --danger: #aa4a2f;
   --code-bg: #0d1512;
   --code-ink: #d4e4da;
+  --border: var(--border-strong);
+  --muted: var(--ink-muted);
+  --foreground: var(--ink);
+  --accent-soft: rgba(29, 107, 88, 0.12);
+  --warning: #aa4a2f;
+  --shadow: 0 24px 90px rgba(36, 44, 39, 0.08);
 }
 
 * {
@@ -57,3 +63,19 @@ img {
   background: rgba(29, 107, 88, 0.2);
 }
 
+.glass-panel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.panel-strong {
+  background: rgba(255, 251, 247, 0.92);
+}
+
+.data-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}

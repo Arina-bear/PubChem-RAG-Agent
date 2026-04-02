@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.schemas.agent import AgentNormalizedPayload, AgentParsedQuery, AgentResponseEnvelope
 from app.schemas.interpret import InterpretationPayload, InterpretResponseEnvelope
 from app.schemas.query import ManualQuerySpec, QueryNormalizedPayload, QueryResponseEnvelope, ResolvedQuery
 
@@ -43,11 +44,34 @@ class FakeInterpretService:
         )
 
 
+class FakeAgentService:
+    async def execute(self, payload) -> AgentResponseEnvelope:
+        return AgentResponseEnvelope(
+            trace_id="agent-trace",
+            normalized=AgentNormalizedPayload(
+                user_text=payload.text,
+                answer="Aspirin is the best match.",
+                provider="modal_glm",
+                model="zai-org/GLM-5-FP8",
+                parsed_query=AgentParsedQuery(
+                    compound_name="aspirin",
+                    confidence=0.8,
+                    recommended_search_mode="name",
+                    language="en",
+                ),
+                compounds=[],
+                tool_calls=[],
+            ),
+            raw=None,
+        )
+
+
 @dataclass
 class FakeContainer:
     settings: object
     query_service: object
     interpret_service: object
+    agent_service: object
 
     async def close(self) -> None:
         return None
@@ -65,6 +89,7 @@ def test_query_route_returns_envelope() -> None:
             settings=SettingsStub(),
             query_service=FakeQueryService(),
             interpret_service=FakeInterpretService(),
+            agent_service=FakeAgentService(),
         )
     )
 
@@ -97,6 +122,7 @@ def test_interpret_route_returns_envelope() -> None:
             settings=SettingsStub(),
             query_service=FakeQueryService(),
             interpret_service=FakeInterpretService(),
+            agent_service=FakeAgentService(),
         )
     )
 
@@ -106,3 +132,28 @@ def test_interpret_route_returns_envelope() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["normalized"]["needs_confirmation"] is True
+
+
+def test_agent_route_returns_envelope() -> None:
+    class SettingsStub:
+        api_version = "0.1.0"
+        environment = "test"
+        pubchem_rest_base_url = "https://example.com/pug"
+        pubchem_view_base_url = "https://example.com/view"
+
+    app = create_app(
+        container_override=FakeContainer(
+            settings=SettingsStub(),
+            query_service=FakeQueryService(),
+            interpret_service=FakeInterpretService(),
+            agent_service=FakeAgentService(),
+        )
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/api/agent", json={"text": "find aspirin"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["normalized"]["answer"] == "Aspirin is the best match."
+    assert payload["normalized"]["parsed_query"]["recommended_search_mode"] == "name"

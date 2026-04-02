@@ -125,6 +125,64 @@ export interface InterpretResponseEnvelope {
   error: ErrorPayload | null;
 }
 
+export type LLMProviderName = "openai" | "modal_glm";
+export type AgentSearchMode = "name" | "smiles" | "formula" | "mass_range" | "clarify";
+
+export interface AgentRequest {
+  text: string;
+  provider?: LLMProviderName | null;
+  model?: string | null;
+  max_steps?: number;
+  max_output_tokens?: number;
+  include_raw?: boolean;
+}
+
+export interface AgentToolCallTrace {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  status: "success" | "error";
+  result: Record<string, unknown> | unknown[] | string | null;
+  error_message?: string | null;
+}
+
+export interface AgentParsedQuery {
+  compound_name?: string | null;
+  synonyms: string[];
+  smiles?: string | null;
+  formula?: string | null;
+  mass_range?: [number, number] | null;
+  mass_type?: "molecular_weight" | "exact_mass" | "monoisotopic_mass" | null;
+  language: "ru" | "en" | "unknown";
+  normalized_language: "en";
+  confidence: number;
+  ambiguities: string[];
+  recommended_search_mode: AgentSearchMode;
+}
+
+export interface AgentNormalizedPayload {
+  user_text: string;
+  answer: string;
+  provider: LLMProviderName;
+  model: string;
+  parsed_query: AgentParsedQuery;
+  needs_clarification: boolean;
+  clarification_question?: string | null;
+  compounds: CompoundOverview[];
+  tool_calls: AgentToolCallTrace[];
+}
+
+export interface AgentResponseEnvelope {
+  trace_id: string;
+  source: "llm-agent";
+  status: "success" | "needs_clarification" | "error";
+  raw: Record<string, unknown> | null;
+  normalized: AgentNormalizedPayload | null;
+  presentation_hints: PresentationHints;
+  warnings: WarningMessage[];
+  error: ErrorPayload | null;
+}
+
 export interface ApiRequestResult<T> {
   ok: boolean;
   status: number;
