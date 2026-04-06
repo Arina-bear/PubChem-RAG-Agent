@@ -25,8 +25,9 @@ def search_by_name_pubchem(name: str, limit: int = 5) -> Dict[str, Any]:
         return {"error": f"No compounds found for '{name}'", "results": []}
         
     results = []
-    try:
-        for cid in cid_list:
+    
+    for cid in cid_list:
+        try:
             # Get properties
             prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,Title/JSON"
             prop_resp = requests.get(prop_url, timeout=10)
@@ -39,12 +40,14 @@ def search_by_name_pubchem(name: str, limit: int = 5) -> Dict[str, Any]:
                     "formula": props.get('MolecularFormula', 'N/A'),
                     "weight": props.get('MolecularWeight', 'N/A')
                 })
-   
-        return {"query": name, "results": results, "count": len(results)}
-    
-    except Exception as e:
-        return {"error": str(e), "results": []}
+        
+        except Exception as e:
+            logging.warning(f"Failed to fetch properties for CID {cid}: {e}")
+            continue
 
+    return {"query": name, "results": results, "count": len(results)}
+           
+    
 def search_by_smiles_pubchem(smiles: str) -> Dict[str, Any]:
     """Search for compound by SMILES in PubChem"""
     try:
@@ -52,8 +55,8 @@ def search_by_smiles_pubchem(smiles: str) -> Dict[str, Any]:
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{encoded_smiles}/cids/JSON"
         response = requests.get(url, timeout=10)
         if response.status_code != 200:
-         return KeyError("Compound '{smiles}' not found")
-       # {"error": f"Compound '{smiles}' not found", "results": []}
+         return {"error": f"Compound '{smiles}' not found", "results": None}
+      
 
         data = response.json()
         cid_list = data.get('IdentifierList', {}).get('CID', [])
@@ -87,7 +90,7 @@ def search_by_formula_pubchem(formula: str, limit: int = 5) -> Dict[str, Any]:
 
     response = requests.get(url, timeout=10)
     if response.status_code != 200:
-         return KeyError("Compound '{formula}' not found")
+         return {"error": f"Compound '{formula}' not found", "results": None}
     
     data = response.json()
     cid_list = data.get('IdentifierList', {}).get('CID', [])
@@ -98,6 +101,7 @@ def search_by_formula_pubchem(formula: str, limit: int = 5) -> Dict[str, Any]:
     results = []
 
     for cid in cid_list:
+        try:
             prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/Title/JSON"
             prop_resp = requests.get(prop_url, timeout=10)
 
@@ -107,6 +111,10 @@ def search_by_formula_pubchem(formula: str, limit: int = 5) -> Dict[str, Any]:
                 results.append({"cid": cid, "name": name})
             else:
                 results.append({"cid": cid, "name": "Unknown"})
+
+        except Exception as e:
+         logging.warning(f"Failed to fetch properties for CID {cid}: {e}")
+         continue
         
     return {"formula": formula, "results": results, "count": len(results)}
     
@@ -158,10 +166,11 @@ class SearchCompoundBySMILES(BaseTool):
         "Returns compound name, CID, formula, and molecular weight."
     )
 
+
+    args_schema: Type[BaseModel] = SearchBySMILESInput
+
     def __init__(self):
         super().__init__()
-
-    #args_schema: Type[BaseModel] = SearchBySMILESInput
 
     def _run(self, query: str) -> str:
         """Search for compound by SMILES"""
@@ -192,7 +201,8 @@ class SearchCompoundByFormula(BaseTool):
         "Input a formula (e.g., 'C9H8O4', 'C6H12O6'). "
         "Returns matching compounds with their CIDs and names."
     )
-   # args_schema: Type[BaseModel] = SearchByFormulaInput
+
+    args_schema: Type[BaseModel] = SearchByFormulaInput
 
     def __init__(self):
         super().__init__()
