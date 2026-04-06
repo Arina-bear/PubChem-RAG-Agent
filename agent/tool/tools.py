@@ -2,11 +2,10 @@ from langchain.tools import BaseTool
 from typing import Type, Optional, Any, Dict
 import requests
 import urllib.parse
-import json
 import logging
 from schemas import (SearchByNameInput, SearchBySMILESInput, SearchByFormulaInput)
 from pydantic import BaseModel
-import traceback
+from langchain.callbacks import get_callback_manager
 
 def search_by_name_pubchem(name: str, limit: int = 5) -> Dict[str, Any]:
     """Search for compound by name in PubChem"""
