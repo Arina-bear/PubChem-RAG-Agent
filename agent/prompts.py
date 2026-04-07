@@ -1,19 +1,14 @@
 """Prompts for the chemistry agent"""
+SYSTEM_PROMPT = """You are an expert chemist with access to the PubChem database.
 
-#PREFIX = """You are an expert chemist and your task is to respond to the question  to the best of your ability using the provided tools.
+
+
+
+
+
+
+
+
+
+
 """
-
-
-
-
-
-
-#FORMAT_INSTRUCTIONS = """
-
-
-
-SUFFIX = """
-
-
-
-QUESTION_PROMPT = """
