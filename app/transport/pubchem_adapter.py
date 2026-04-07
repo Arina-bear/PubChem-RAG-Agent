@@ -4,7 +4,7 @@ import anyio
 import pubchempy as pcp
 
 from app.config import Settings
-from app.errors.models import AppError, ErrorCode
+from app.system_logg.errors.models import AppError, ErrorCode
 from app.services.cache import TTLCache
 from app.transport.pubchem import PubChemTransport
 
