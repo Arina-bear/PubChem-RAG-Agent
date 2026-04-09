@@ -14,7 +14,7 @@ class ResolvedChatModel:
     instance: ChatOpenAI
 
 
-def build_chat_model(settings: Settings, provider: LLMProviderName | None = None) -> ResolvedChatModel:
+def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | None = None) -> tuple[LLMProviderName, str]:
     resolved_provider = provider or settings.llm_default_provider
     if resolved_provider not in {"openai", "modal_glm"}:
         raise AppError(
@@ -22,6 +22,14 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             f"Неизвестный LLM provider: '{resolved_provider}'.",
             http_status=400,
         )
+    if resolved_provider == "openai":
+        return "openai", settings.openai_model
+    return "modal_glm", settings.modal_glm_model
+
+
+def build_chat_model(settings: Settings, provider: LLMProviderName | None = None) -> ResolvedChatModel:
+    resolved_provider, model_name = resolve_provider_model_name(settings, provider)
+    model_kwargs = {"parallel_tool_calls": False}
 
     if resolved_provider == "openai":
         if settings.openai_api_key is None:
@@ -30,7 +38,6 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                 "OPENAI_API_KEY не настроен.",
                 http_status=500,
             )
-        model_name = settings.openai_model
         instance = ChatOpenAI(
             model=model_name,
             api_key=settings.openai_api_key,
@@ -38,6 +45,7 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             timeout=settings.llm_request_timeout_seconds,
             max_retries=settings.max_retries,
             temperature=0,
+            model_kwargs=model_kwargs,
             use_responses_api=False,
         )
         return ResolvedChatModel(provider="openai", model_name=model_name, instance=instance)
@@ -53,7 +61,6 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
     if settings.modal_glm_disable_thinking:
         extra_body = {"thinking": {"type": "disabled"}}
 
-    model_name = settings.modal_glm_model
     instance = ChatOpenAI(
         model=model_name,
         api_key=settings.modal_glm_api_key,
@@ -61,6 +68,7 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
         timeout=settings.llm_request_timeout_seconds,
         max_retries=settings.max_retries,
         temperature=0,
+        model_kwargs=model_kwargs,
         extra_body=extra_body,
         use_responses_api=False,
     )

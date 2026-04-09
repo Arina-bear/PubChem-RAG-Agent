@@ -1,9 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { FlaskConical, Weight, Droplets, Layers, ExternalLink, Atom, Search } from "lucide-react"
+import { FlaskConical, Weight, Droplets, Layers, ExternalLink, Atom } from "lucide-react"
 
 function formatFormula(formula) {
   if (!formula) return "—"
@@ -29,42 +28,7 @@ function PropertyItem({ icon, label, value, unit }) {
   )
 }
 
-function LoadingState() {
-  return (
-    <Card className="w-full max-w-3xl overflow-hidden border-0" style={{ background: "linear-gradient(145deg, hsl(var(--card)) 0%, color-mix(in srgb, hsl(var(--card)) 86%, black) 100%)", color: "hsl(var(--card-foreground))" }}>
-      <CardHeader className="space-y-3">
-        <div className="flex items-center gap-2 text-sm" style={{ color: "hsl(var(--primary))" }}>
-          <Search className="h-4 w-4" />
-          <span>PubChem search in progress</span>
-        </div>
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-4 w-full max-w-xl" />
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid gap-3 md:grid-cols-[132px_1fr]">
-          <div className="rounded-2xl border bg-white p-3" style={{ borderColor: "hsl(var(--border))" }}>
-            <Skeleton className="h-20 w-full" />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Skeleton className="h-16 w-full rounded-xl" />
-            <Skeleton className="h-16 w-full rounded-xl" />
-            <Skeleton className="h-16 w-full rounded-xl" />
-            <Skeleton className="h-16 w-full rounded-xl" />
-          </div>
-        </div>
-        <div className="text-sm" style={{ color: "hsl(var(--muted-foreground))" }}>
-          {props.status || "Ищу подходящие соединения и собираю их свойства..."}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function CompoundCard() {
-  if (props.loading) {
-    return <LoadingState />
-  }
-
   const name = props.name || "Unknown compound"
   const iupac = props.iupac_name || null
   const imageUrl = props.image_url || null

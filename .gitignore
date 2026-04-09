@@ -4,6 +4,7 @@
 .python-version
 .venv/
 backend/.venv/
+backend/.files/
 backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.ruff_cache/
@@ -17,6 +18,7 @@ frontend/.bun-cache/
 frontend/.tmp/
 frontend/tsconfig.tsbuildinfo
 .playwright-cli/
+/.chainlit/
 dist/
 coverage/
 # ========== Python ==========

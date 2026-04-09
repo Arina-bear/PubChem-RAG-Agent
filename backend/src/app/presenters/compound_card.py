@@ -12,7 +12,6 @@ def build_compound_card_props(
 ) -> dict[str, Any]:
     name = compound.title or compound.iupac_name or f"CID {compound.cid}"
     return {
-        "loading": False,
         "cid": compound.cid,
         "name": name,
         "iupac_name": compound.iupac_name,
@@ -31,14 +30,6 @@ def build_compound_card_props(
         "image_url": build_structure_image_url(compound.cid),
         "pubchem_url": build_pubchem_compound_url(compound.cid),
         "ghs_hazards": [],
-    }
-
-
-def build_pending_compound_card_props(user_query: str) -> dict[str, Any]:
-    return {
-        "loading": True,
-        "query": user_query,
-        "status": "Ищу кандидатов в PubChem и собираю ключевые свойства...",
     }
 
 
