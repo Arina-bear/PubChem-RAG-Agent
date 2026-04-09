@@ -1,0 +1,55 @@
+{
+  "custom_fonts": [
+    "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+  ],
+  "variables": {
+    "light": {
+      "--font-sans": "'IBM Plex Sans', sans-serif",
+      "--font-mono": "'IBM Plex Mono', monospace",
+      "--background": "210 56% 97%",
+      "--foreground": "215 49% 15%",
+      "--card": "0 0% 100%",
+      "--card-foreground": "215 49% 15%",
+      "--popover": "0 0% 100%",
+      "--popover-foreground": "215 49% 15%",
+      "--primary": "217 91% 60%",
+      "--primary-foreground": "210 40% 98%",
+      "--secondary": "211 56% 94%",
+      "--secondary-foreground": "215 37% 22%",
+      "--muted": "210 44% 94%",
+      "--muted-foreground": "216 24% 42%",
+      "--accent": "213 94% 93%",
+      "--accent-foreground": "217 91% 36%",
+      "--destructive": "0 72% 51%",
+      "--destructive-foreground": "210 40% 98%",
+      "--border": "212 41% 86%",
+      "--input": "212 41% 86%",
+      "--ring": "217 91% 60%",
+      "--radius": "1rem"
+    },
+    "dark": {
+      "--font-sans": "'IBM Plex Sans', sans-serif",
+      "--font-mono": "'IBM Plex Mono', monospace",
+      "--background": "214 58% 8%",
+      "--foreground": "213 100% 96%",
+      "--card": "214 47% 12%",
+      "--card-foreground": "213 100% 96%",
+      "--popover": "214 47% 12%",
+      "--popover-foreground": "213 100% 96%",
+      "--primary": "213 94% 68%",
+      "--primary-foreground": "214 58% 8%",
+      "--secondary": "214 34% 18%",
+      "--secondary-foreground": "210 40% 94%",
+      "--muted": "214 33% 18%",
+      "--muted-foreground": "214 23% 71%",
+      "--accent": "214 41% 22%",
+      "--accent-foreground": "213 94% 78%",
+      "--destructive": "0 72% 61%",
+      "--destructive-foreground": "213 100% 96%",
+      "--border": "214 35% 24%",
+      "--input": "214 35% 24%",
+      "--ring": "213 94% 68%",
+      "--radius": "1rem"
+    }
+  }
+}

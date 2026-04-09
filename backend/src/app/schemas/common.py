@@ -34,6 +34,10 @@ class CompoundOverview(BaseModel):
     inchi_key: str | None = None
     xlogp: float | None = None
     tpsa: float | None = None
+    complexity: float | None = None
+    hbond_donor_count: int | None = None
+    hbond_acceptor_count: int | None = None
+    description: str | None = None
     image_data_url: str | None = None
     synonyms_preview: list[str] = Field(default_factory=list)
 
