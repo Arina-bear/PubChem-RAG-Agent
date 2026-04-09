@@ -27,4 +27,16 @@ CHAINLIT_PID=$!
 echo "FastAPI:  http://127.0.0.1:8000"
 echo "Chainlit: http://127.0.0.1:3000"
 
-wait -n "$API_PID" "$CHAINLIT_PID"
+while true; do
+  if ! kill -0 "$API_PID" 2>/dev/null; then
+    wait "$API_PID"
+    break
+  fi
+
+  if ! kill -0 "$CHAINLIT_PID" 2>/dev/null; then
+    wait "$CHAINLIT_PID"
+    break
+  fi
+
+  sleep 1
+done
