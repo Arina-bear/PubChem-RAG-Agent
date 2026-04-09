@@ -1,28 +1,40 @@
-# MVP-интерфейс для запросов к PubChem
+# MVP-архив и API-заметки для PubChem
 
-Небольшая платформа для поиска соединений в PubChem.
+Этот файл теперь служит как переходная заметка между старым MVP и новой Chainlit-версией.
 
 Этот файл вынесен из корня проекта в `readme-api.md`, чтобы при встраивании в другой репозиторий не перезаписывать его основной `README.md`.
 Текущая структура проекта остаётся изолированной: основная реализация лежит в отдельных папках и может переноситься поверх чужой ветки без удаления уже существующих файлов.
 
-Сейчас в проекте есть два режима:
+Сейчас важно различать два состояния:
 
-- `Ручной режим` для точного запроса по `name`, `cid` или `smiles`;
-- `агентный режим` для перевода текстового запроса в структурированный запрос к backend.
+- `legacy MVP` на `frontend/` с `Next.js`
+- `текущий основной UI` на `Chainlit`
 
-Это не классический RAG и не векторный поиск. Текущая версия делает прямые запросы к PubChem и показывает результат в удобном интерфейсе.
+Это не классический векторный RAG. Текущая версия делает grounded-запросы к PubChem через adapter/tools и показывает результат либо через API, либо через Chainlit UI.
 
-## Структура проекта
+## Актуальная структура проекта
 
 - `backend/` — FastAPI backend, адаптер PubChem, нормализация ответов, тесты.
-- `frontend/` — Next.js интерфейс с ручным режимом, агентным режимом и вкладкой `JSON`.
-- `infra/` — `docker-compose` для `api`, `web` и `redis`.
+- `backend/src/chainlit_app.py` — текущий основной UI entrypoint.
+- `frontend/` — legacy Next.js интерфейс из раннего MVP.
+- `infra/` — `docker-compose` для `api`, `chainlit` и `redis`.
   Сейчас `redis` уже подготовлен в инфраструктуре, но в MVP рантайм всё ещё использует in-memory cache.
 - `docs/` — краткая документация по архитектуре, API, стеку и текущим ограничениям.
 
 ## Локальный запуск
 
-### Backend
+### Основной dev flow
+
+```bash
+./scripts/dev.sh
+```
+
+После этого:
+
+- Chainlit UI: `http://127.0.0.1:3000`
+- FastAPI API: `http://127.0.0.1:8000`
+
+Если нужен только API:
 
 ```bash
 cd backend
@@ -30,24 +42,22 @@ uv sync
 uv run uvicorn app.main:app --app-dir src --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend
+Если нужен только Chainlit UI:
 
 ```bash
-cd frontend
-bun install
-bun run dev
+cd backend
+uv sync
+uv run chainlit run src/chainlit_app.py --headless --host 127.0.0.1 --port 3000
 ```
-
-Frontend обращается к своим же маршрутам `/api/*`, а они уже проксируют запросы в backend. По умолчанию backend ожидается на `http://127.0.0.1:8000`.
 
 ## Что уже работает
 
 - `GET /api/health`
 - `POST /api/query`
 - `POST /api/interpret`
-- ручной поиск по `name`, `cid`, `smiles`
-- типизированный backend и агентный режим также поддерживают `inchikey` и `formula`
-- вкладки результата `Обзор`, `Синонимы`, `JSON`
+- `POST /api/agent`
+- LangChain tools для `name`, `smiles`, `formula`, `inchikey`, `mass_range`, `synonym`, `name_to_smiles`, `compound_summary`, `clarification`
+- Chainlit UI с `CompoundCard`, `tool trace`, streaming steps и Langfuse-ready tracing
 
 ## Что пока не включено
 
@@ -56,3 +66,4 @@ Frontend обращается к своим же маршрутам `/api/*`, а
 - `jobs`
 - `PUG View`
 - тяжёлые структурные поиски в UI
+- полный вывод bioactivity / assay / reference tools

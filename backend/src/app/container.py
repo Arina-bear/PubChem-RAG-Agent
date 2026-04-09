@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 from app.adapter.pubchem_adapter import PubChemAdapter
 from app.config import Settings, get_settings
+from app.services.agent_stream_service import AgentStreamService
+from app.services.agent_service import AgentService
 from app.services.cache import TTLCache
 from app.services.interpret_service import InterpretService
 from app.services.query_service import QueryService
@@ -18,6 +20,8 @@ class AppContainer:
     adapter: PubChemAdapter
     query_service: QueryService
     interpret_service: InterpretService
+    agent_service: AgentService
+    agent_stream_service: AgentStreamService
 
     async def close(self) -> None:
         await self.transport.close()
@@ -38,4 +42,6 @@ def build_container(settings: Settings | None = None) -> AppContainer:
         adapter=adapter,
         query_service=QueryService(resolved_settings, adapter),
         interpret_service=InterpretService(),
+        agent_service=AgentService(resolved_settings, adapter),
+        agent_stream_service=AgentStreamService(resolved_settings, adapter),
     )

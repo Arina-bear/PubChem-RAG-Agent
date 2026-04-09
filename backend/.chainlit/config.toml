@@ -1,0 +1,23 @@
+[project]
+enable_telemetry = false
+
+[features]
+latex = false
+user_message_markdown = true
+assistant_message_autoscroll = true
+
+[UI]
+name = "PubChem Agent"
+description = "LangChain + Chainlit interface for grounded PubChem compound search."
+cot = "tool_call"
+default_theme = "dark"
+language = "ru-RU"
+layout = "wide"
+default_sidebar_state = "open"
+alert_style = "modern"
+custom_css = "/public/custom.css"
+custom_js = "/public/custom.js"
+github = "https://github.com/Arina-bear/PubChem-RAG-Agent"
+
+[meta]
+generated_by = "2.11.0"

@@ -1,13 +1,19 @@
 [project]
 name = "pubchem-compound-explorer-api"
 version = "0.1.0"
-description = "FastAPI backend для MVP-интерфейса запросов к PubChem."
+description = "FastAPI + LangChain + Chainlit backend/runtime для grounded PubChem agent."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "anyio>=4.11.0,<5.0.0",
+  "chainlit>=2.0.0,<3.0.0",
   "fastapi>=0.128.0,<1.0.0",
   "httpx>=0.28.1,<1.0.0",
+  "langchain>=1.0,<2.0",
+  "langchain-core>=1.0,<2.0",
+  "langchain-openai>=1.0,<2.0",
+  "langfuse>=3.0,<4.0",
+  "langgraph>=1.0,<2.0",
   "orjson>=3.11.0,<4.0.0",
   "pubchempy>=1.0.4,<2.0.0",
   "pydantic>=2.11.0,<3.0.0",

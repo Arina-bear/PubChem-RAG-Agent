@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,10 +19,25 @@ class Settings(BaseSettings):
     pubchem_view_base_url: str = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
 
     request_timeout_seconds: float = 15.0
+    llm_request_timeout_seconds: float = 45.0
     max_retries: int = 3
     candidate_limit: int = 10
     query_rate_limit_per_second: int = 3
     heavy_query_concurrency: int = 1
+    agent_max_steps: int = 6
+
+    llm_default_provider: str = "modal_glm"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-4.1-mini"
+    modal_glm_base_url: str = "https://api.us-west-2.modal.direct/v1"
+    modal_glm_api_key: SecretStr | None = None
+    modal_glm_model: str = "zai-org/GLM-5-FP8"
+    modal_glm_disable_thinking: bool = True
+
+    langfuse_public_key: SecretStr | None = None
+    langfuse_secret_key: SecretStr | None = None
+    langfuse_base_url: str = "https://cloud.langfuse.com"
 
     cors_origins: tuple[str, ...] = (
         "http://localhost:3000",
@@ -38,4 +53,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

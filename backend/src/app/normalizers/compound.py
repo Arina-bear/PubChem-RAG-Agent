@@ -10,6 +10,9 @@ PROPERTY_KEYS = [
     "ExactMass",
     "XLogP",
     "TPSA",
+    "Complexity",
+    "HBondDonorCount",
+    "HBondAcceptorCount",
     "CanonicalSMILES",
     "ConnectivitySMILES",
     "SMILES",
@@ -28,6 +31,19 @@ def extract_synonyms(synonyms_payload: dict[str, Any]) -> list[str]:
         return []
     synonyms = information[0].get("Synonym", [])
     return [value for value in synonyms if isinstance(value, str)]
+
+
+def extract_description_text(description_payload: dict[str, Any] | None) -> str | None:
+    if not description_payload:
+        return None
+    information = description_payload.get("InformationList", {}).get("Information", [])
+    if not information:
+        return None
+    description = information[0].get("Description") or information[0].get("Title")
+    if not isinstance(description, str):
+        return None
+    cleaned = " ".join(description.split())
+    return cleaned or None
 
 
 def normalize_compound(
@@ -49,6 +65,9 @@ def normalize_compound(
         exact_mass=_to_float(record.get("ExactMass")),
         xlogp=_to_float(record.get("XLogP")),
         tpsa=_to_float(record.get("TPSA")),
+        complexity=_to_float(record.get("Complexity")),
+        hbond_donor_count=_to_int(record.get("HBondDonorCount")),
+        hbond_acceptor_count=_to_int(record.get("HBondAcceptorCount")),
         canonical_smiles=record.get("CanonicalSMILES") or record.get("ConnectivitySMILES") or record.get("SMILES"),
         inchi_key=record.get("InChIKey"),
         image_data_url=image_data_url,
@@ -71,5 +90,14 @@ def _to_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None

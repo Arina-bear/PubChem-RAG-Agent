@@ -76,6 +76,49 @@ class PubChemAdapter:
         payload = await self.transport.request_json(f"/compound/{input_mode}/{encoded_identifier}/cids/JSON")
         return payload.get("IdentifierList", {}).get("CID", [])
 
+    async def resolve_cids_by_mass_range(
+        self,
+        *,
+        min_mass: float,
+        max_mass: float,
+        mass_type: str,
+        limit: int,
+    ) -> list[int]:
+        supported_mass_types = {"molecular_weight", "exact_mass", "monoisotopic_mass"}
+        if mass_type not in supported_mass_types:
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                f"Неподдерживаемый тип массы: '{mass_type}'.",
+                http_status=400,
+            )
+        if min_mass > max_mass:
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR,
+                "Минимальная масса должна быть меньше или равна максимальной.",
+                http_status=400,
+            )
+
+        cache_key = f"mass-range:{mass_type}:{min_mass}:{max_mass}:{limit}"
+        cached = await self.cache.get(cache_key)
+        if cached is not None:
+            return list(cached)[:limit]  # type: ignore[arg-type]
+
+        payload = await self.transport.request_json(
+            f"/compound/{mass_type}/range/{min_mass}/{max_mass}/cids/JSON",
+            params={"MaxRecords": limit},
+        )
+        cids = payload.get("IdentifierList", {}).get("CID", [])
+        if not cids:
+            raise AppError(
+                ErrorCode.NO_MATCH,
+                "PubChem не нашёл соединений в заданном диапазоне массы.",
+                http_status=404,
+            )
+
+        deduplicated = list(dict.fromkeys(int(cid) for cid in cids))
+        await self.cache.set(cache_key, deduplicated, ttl_seconds=1800)
+        return deduplicated[:limit]
+
     async def fetch_compound_snapshot(
         self,
         cid: int,
@@ -130,6 +173,9 @@ class PubChemAdapter:
                 "ExactMass",
                 "XLogP",
                 "TPSA",
+                "Complexity",
+                "HBondDonorCount",
+                "HBondAcceptorCount",
                 "CanonicalSMILES",
                 "ConnectivitySMILES",
                 "SMILES",
