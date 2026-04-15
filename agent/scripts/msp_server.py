@@ -226,5 +226,5 @@ async def search_by_formula_pubchem(formula: str, limit: int = 5) -> str:
         }, ensure_ascii=False)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":#запуск цикла событий
     mcp.run(transport="stdio")
