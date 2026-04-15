@@ -10,6 +10,42 @@ from app.errors.models import AppError, ErrorCode
 from app.normalizers.compound import extract_description_text, extract_synonyms, normalize_compound, to_match_card
 
 
+PUBCHEM_TOOL_CATALOG: tuple[dict[str, str], ...] = (
+    {
+        "name": "search_compound_by_name",
+        "summary": "Поиск кандидатов по явному названию вещества или ключевому слову.",
+    },
+    {
+        "name": "search_compound_by_smiles",
+        "summary": "Точный поиск по SMILES-строке.",
+    },
+    {
+        "name": "search_compound_by_formula",
+        "summary": "Поиск по молекулярной формуле.",
+    },
+    {
+        "name": "search_compound_by_inchikey",
+        "summary": "Точный поиск по InChIKey.",
+    },
+    {
+        "name": "search_compound_by_mass_range",
+        "summary": "Поиск по диапазону массы с ограничением по типу массы.",
+    },
+    {
+        "name": "get_compound_summary",
+        "summary": "Получение компактной сводки и свойств по конкретному CID.",
+    },
+    {
+        "name": "name_to_smiles",
+        "summary": "Преобразование названия вещества в canonical SMILES.",
+    },
+    {
+        "name": "search_by_synonym",
+        "summary": "Поиск по синониму или альтернативному имени вещества.",
+    },
+)
+
+
 def _error_payload(error: AppError) -> dict[str, Any]:
     return {
         "ok": False,
@@ -154,11 +190,6 @@ class SearchBySynonymArgs(BaseModel):
         if not cleaned:
             raise ValueError("synonym must not be blank")
         return cleaned
-
-
-class ClarificationArgs(BaseModel):
-    question: str = Field(min_length=1, description="Clarifying question to ask the user.")
-    reason: str | None = Field(default=None, description="Short reason why clarification is needed.")
 
 
 def build_pubchem_tools(
@@ -325,22 +356,6 @@ def build_pubchem_tools(
         recorder.record(tool_name="search_by_synonym", arguments=arguments, result=result)
         return result
 
-    @tool("ask_user_for_clarification", args_schema=ClarificationArgs)
-    async def ask_user_for_clarification(question: str, reason: str | None = None) -> dict[str, Any]:
-        """Ask the user a short clarification question when the request is too ambiguous for a safe lookup."""
-        result = {
-            "ok": True,
-            "needs_clarification": True,
-            "question": question,
-            "reason": reason,
-        }
-        recorder.record(
-            tool_name="ask_user_for_clarification",
-            arguments={"question": question, "reason": reason},
-            result=result,
-        )
-        return result
-
     return [
         search_compound_by_name,
         search_compound_by_smiles,
@@ -350,5 +365,4 @@ def build_pubchem_tools(
         get_compound_summary,
         name_to_smiles,
         search_by_synonym,
-        ask_user_for_clarification,
     ]

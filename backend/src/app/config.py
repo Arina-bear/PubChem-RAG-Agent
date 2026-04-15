@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     pubchem_rest_base_url: str = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
     pubchem_view_base_url: str = "https://pubchem.ncbi.nlm.nih.gov/rest/pug_view"
 
-    request_timeout_seconds: float = 15.0
-    llm_request_timeout_seconds: float = 45.0
+    request_timeout_seconds: float = 20.0
+    llm_request_timeout_seconds: float = 90.0
+    agent_run_timeout_seconds: float = 240.0
     max_retries: int = 3
     candidate_limit: int = 10
     query_rate_limit_per_second: int = 3
@@ -32,7 +33,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4.1-mini"
     modal_glm_base_url: str = "https://api.us-west-2.modal.direct/v1"
     modal_glm_api_key: SecretStr | None = None
-    modal_glm_model: str = "zai-org/GLM-5-FP8"
+    modal_glm_model: str = "zai-org/GLM-5.1-FP8"
     modal_glm_disable_thinking: bool = True
 
     langfuse_public_key: SecretStr | None = None

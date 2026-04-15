@@ -49,7 +49,7 @@ class FakeAgentService:
         return AgentResponseEnvelope(
             trace_id=trace_id or "agent-trace",
             normalized=AgentNormalizedPayload(
-                request=AgentExecutionInfo(provider="modal_glm", model="zai-org/GLM-5-FP8", text=payload.text),
+                request=AgentExecutionInfo(provider="modal_glm", model="zai-org/GLM-5.1-FP8", text=payload.text),
                 parsed_query=ParsedAgentQuery(intent="lookup by name", language="ru", compound_name="aspirin"),
                 final_answer="Aspirin is a well-known analgesic compound in PubChem.",
                 explanation=["The user explicitly named aspirin."],
@@ -150,6 +150,8 @@ def test_agent_route_returns_envelope() -> None:
         response = client.post("/api/agent", json={"text": "что такое aspirin?"})
 
     assert response.status_code == 200
+    assert "-" not in response.headers["X-Trace-ID"]
+    assert len(response.headers["X-Trace-ID"]) == 32
     payload = response.json()
     assert payload["normalized"]["request"]["provider"] == "modal_glm"
     assert payload["normalized"]["final_answer"].startswith("Aspirin")

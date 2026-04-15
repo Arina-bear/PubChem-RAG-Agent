@@ -1,13 +1,15 @@
 from collections.abc import Callable
+import asyncio
 from typing import Any
 import uuid
 
-from langgraph.errors import GraphRecursionError
-
 from app.adapter.pubchem_adapter import PubChemAdapter
+from app.agent.error_mapper import normalize_agent_exception
+from app.agent.meta import build_capability_response, is_capability_question
+from app.agent.model_factory import resolve_provider_model_name
 from app.agent.runtime import PreparedAgentRuntime, prepare_agent_runtime
+from app.agent.tracing import record_manual_agent_trace
 from app.config import Settings
-from app.errors.models import AppError, ErrorCode
 from app.schemas.agent import AgentRequest, AgentResponseEnvelope, AgentToolTraceEntry
 from app.services.agent_service import build_agent_response_envelope
 
@@ -19,10 +21,12 @@ class AgentStreamService:
         adapter: PubChemAdapter,
         *,
         runtime_factory: Callable[..., PreparedAgentRuntime] = prepare_agent_runtime,
+        manual_trace_recorder: Callable[..., None] = record_manual_agent_trace,
     ) -> None:
         self.settings = settings
         self.adapter = adapter
         self.runtime_factory = runtime_factory
+        self.manual_trace_recorder = manual_trace_recorder
 
     async def execute(
         self,
@@ -32,7 +36,29 @@ class AgentStreamService:
         extra_callbacks: list[Any] | None = None,
         metadata_overrides: dict[str, Any] | None = None,
     ) -> AgentResponseEnvelope:
-        resolved_trace_id = trace_id or str(uuid.uuid4())
+        resolved_trace_id = trace_id or uuid.uuid4().hex
+        if is_capability_question(request.text):
+            provider_name, model_name = resolve_provider_model_name(self.settings, request.provider)
+            response = build_capability_response(
+                trace_id=resolved_trace_id,
+                request_text=request.text,
+                provider=provider_name,
+                model_name=model_name,
+            )
+            self.manual_trace_recorder(
+                self.settings,
+                trace_id=resolved_trace_id,
+                name="pubchem-agent-capabilities",
+                provider=provider_name,
+                model_name=model_name,
+                input_payload={
+                    "text": request.text,
+                    "provider": provider_name,
+                },
+                output_payload=response.model_dump(mode="json"),
+                metadata=metadata_overrides,
+            )
+            return response
         runtime = self.runtime_factory(
             self.settings,
             self.adapter,
@@ -53,26 +79,21 @@ class AgentStreamService:
         invoke_config["metadata"] = metadata
 
         try:
-            result = await runtime.agent.ainvoke(
-                {"messages": [{"role": "user", "content": request.text}]},
-                config=invoke_config,
+            result = await asyncio.wait_for(
+                runtime.agent.ainvoke(
+                    {"messages": [{"role": "user", "content": request.text}]},
+                    config=invoke_config,
+                ),
+                timeout=max(
+                    self.settings.agent_run_timeout_seconds,
+                    self.settings.llm_request_timeout_seconds,
+                    30.0,
+                ),
             )
-        except GraphRecursionError as exc:
-            raise AppError(
-                ErrorCode.TOOL_LOOP_ABORTED,
-                "Агент превысил лимит шагов tool calling и был остановлен.",
-                http_status=502,
-                retriable=False,
-            ) from exc
-
-        structured = result.get("structured_response")
-        if structured is None:
-            raise AppError(
-                ErrorCode.UPSTREAM_UNAVAILABLE,
-                "LLM не вернула структурированный финальный ответ.",
-                http_status=502,
-                retriable=True,
-            )
+        except Exception as exc:
+            raise normalize_agent_exception(exc) from exc
+        finally:
+            runtime.tracing.flush()
 
         tool_trace = [
             AgentToolTraceEntry(

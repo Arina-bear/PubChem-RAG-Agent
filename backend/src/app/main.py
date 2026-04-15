@@ -48,7 +48,7 @@ def create_app(container_override: AppContainer | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def attach_trace_id(request: Request, call_next):
-        request.state.trace_id = str(uuid.uuid4())
+        request.state.trace_id = uuid.uuid4().hex
         response = await call_next(request)
         response.headers["X-Trace-ID"] = request.state.trace_id
         return response

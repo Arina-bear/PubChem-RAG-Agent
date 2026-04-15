@@ -6,26 +6,18 @@ import uuid
 
 import chainlit as cl
 
+from app.agent.meta import is_capability_question
 from app.container import AppContainer, build_container
+from app.errors.models import AppError
 from app.presenters.compound_card import (
     build_candidates_markdown,
     build_compound_card_props,
-    build_pending_compound_card_props,
     build_structure_image_url,
     build_tool_trace_markdown,
     extract_primary_synonyms,
     select_primary_compound,
 )
 from app.schemas.agent import AgentRequest, AgentResponseEnvelope
-
-WELCOME_MESSAGE = """
-PubChem Agent готов к поиску по естественному языку.
-
-Примеры запросов:
-- антибиотик с бензольным кольцом, молекулярная масса около 350
-- соединение похоже на aspirin
-- найди молекулу по описанию и верни свойства
-""".strip()
 
 
 def _get_or_create_container() -> AppContainer:
@@ -76,12 +68,57 @@ def _build_details_markdown(response: AgentResponseEnvelope) -> str:
     return "\n".join(lines)
 
 
+@cl.set_starters
+async def set_starters(
+    current_user: cl.User | None = None,  # noqa: ARG001
+    language: str = "ru-RU",
+) -> list[cl.Starter]:
+    is_russian = language.lower().startswith("ru")
+    if is_russian:
+        return [
+            cl.Starter(
+                label="Антибиотик по признакам",
+                message="антибиотик с бензольным кольцом, молекулярная масса около 350",
+            ),
+            cl.Starter(
+                label="Похожее на aspirin",
+                message="соединение похоже на aspirin",
+            ),
+            cl.Starter(
+                label="Молекула по описанию",
+                message="найди молекулу по описанию и верни свойства",
+            ),
+            cl.Starter(
+                label="Какие у тебя инструменты?",
+                message="Какие инструменты у тебя есть?",
+            ),
+        ]
+
+    return [
+        cl.Starter(
+            label="Antibiotic by constraints",
+            message="antibiotic with a benzene ring and molecular weight around 350",
+        ),
+        cl.Starter(
+            label="Similar to aspirin",
+            message="find a compound similar to aspirin",
+        ),
+        cl.Starter(
+            label="Find by description",
+            message="find a molecule from its description and return key properties",
+        ),
+        cl.Starter(
+            label="What tools do you have?",
+            message="What tools do you have?",
+        ),
+    ]
+
+
 @cl.on_chat_start
 async def on_chat_start() -> None:
     container = _get_or_create_container()
     _get_session_id()
     cl.user_session.set("llm_provider", container.settings.llm_default_provider)
-    await cl.Message(content=WELCOME_MESSAGE, author="PubChem Agent").send()
 
 
 @cl.on_chat_end
@@ -97,91 +134,102 @@ async def on_message(message: cl.Message) -> None:
     session_id = _get_session_id()
     provider = cast(str, cl.user_session.get("llm_provider") or container.settings.llm_default_provider)
     trace_id = uuid.uuid4().hex
+    capability_mode = is_capability_question(message.content)
 
-    pending_card = cl.CustomElement(
-        name="CompoundCard",
-        props=build_pending_compound_card_props(message.content),
-        display="inline",
-    )
-    await cl.Message(
-        content="Понял запрос. Ищу кандидатов и собираю свойства из PubChem...",
-        elements=[pending_card],
-        author="PubChem Agent",
-    ).send()
-
-    callback = cl.LangchainCallbackHandler()
-    response = await container.agent_stream_service.execute(
-        AgentRequest(
-            text=message.content,
-            provider=provider,
-            include_raw=True,
-        ),
-        trace_id=trace_id,
-        extra_callbacks=[callback],
-        metadata_overrides={
-            "surface": "chainlit",
-            "chainlit_session_id": session_id,
-            "agent_provider": provider,
-        },
-    )
+    try:
+        if capability_mode:
+            response = await container.agent_stream_service.execute(
+                AgentRequest(
+                    text=message.content,
+                    provider=provider,
+                    include_raw=True,
+                ),
+                trace_id=trace_id,
+                metadata_overrides={
+                    "surface": "chainlit",
+                    "chainlit_session_id": session_id,
+                    "langfuse_session_id": session_id,
+                    "langfuse_user_id": session_id,
+                    "langfuse_tags": ["pubchem-agent", provider, "chainlit"],
+                    "agent_provider": provider,
+                },
+            )
+        else:
+            async with cl.Step(name="Поиск в PubChem") as step:
+                step.output = "Ищу кандидатов в PubChem и собираю ключевые свойства..."
+                response = await container.agent_stream_service.execute(
+                    AgentRequest(
+                        text=message.content,
+                        provider=provider,
+                        include_raw=True,
+                    ),
+                    trace_id=trace_id,
+                    metadata_overrides={
+                        "surface": "chainlit",
+                        "chainlit_session_id": session_id,
+                        "langfuse_session_id": session_id,
+                        "langfuse_user_id": session_id,
+                        "langfuse_tags": ["pubchem-agent", provider, "chainlit"],
+                        "agent_provider": provider,
+                    },
+                )
+                step.output = "Поиск завершён."
+    except AppError as error:
+        await cl.Message(content=error.message, author="PubChem Agent").send()
+        return
+    except Exception:
+        await cl.Message(
+            content="Не удалось завершить запрос из-за внутренней ошибки приложения.",
+            author="PubChem Agent",
+        ).send()
+        return
 
     normalized = response.normalized
     if normalized is None:
-        pending_card.props = {
-            "loading": False,
-            "status": "Не удалось получить нормализованный ответ агента.",
-        }
-        await pending_card.update()
         await cl.Message(content="Не удалось получить итоговый ответ от агента.", author="PubChem Agent").send()
         return
 
     parsed_query_payload = normalized.parsed_query.model_dump(mode="json", exclude_none=True)
-    async with cl.Step(name="Интерпретация запроса", type="tool", show_input="json") as step:
+    async with cl.Step(name="Интерпретация запроса", show_input="json") as step:
         step.input = {"query": message.content}
         step.output = json.dumps(parsed_query_payload, ensure_ascii=False, indent=2)
 
     primary = select_primary_compound(response)
-    side_elements: list[cl.Element] = []
+    message_elements: list[cl.Element] = []
     if primary is not None:
         synonyms = extract_primary_synonyms(response, primary.cid)
-        pending_card.props = build_compound_card_props(
-            primary,
-            explanation=normalized.explanation,
-            synonyms=synonyms,
+        message_elements.append(
+            cl.CustomElement(
+                name="CompoundCard",
+                props=build_compound_card_props(
+                    primary,
+                    explanation=normalized.explanation,
+                    synonyms=synonyms,
+                ),
+                display="inline",
+            )
         )
-        await pending_card.update()
-        side_elements.append(
+        message_elements.append(
             cl.Image(
                 name=f"CID {primary.cid} structure",
                 url=build_structure_image_url(primary.cid),
                 display="side",
             )
         )
-        side_elements.append(
+        message_elements.append(
             cl.Text(
                 name="Подробности вещества",
                 content=_build_details_markdown(response),
                 display="side",
             )
         )
-    else:
-        pending_card.props = {
-            "loading": False,
-            "status": normalized.clarification_question or "Подходящее вещество не выбрано.",
-        }
-        await pending_card.update()
 
     if normalized.tool_trace:
-        side_elements.append(
-            cl.Text(
-                name="Ход поиска",
-                content=build_tool_trace_markdown(response),
-                display="side",
-            )
-        )
+        async with cl.Step(name="Использованные инструменты", type="tool") as step:
+            step.output = build_tool_trace_markdown(response)
 
     if len(normalized.matches) > 1:
-        side_elements.append(
+        message_elements.append(
             cl.Text(
                 name="Другие кандидаты",
                 content=build_candidates_markdown(normalized.matches[1:]),
@@ -199,13 +247,13 @@ async def on_message(message: cl.Message) -> None:
     if normalized.needs_clarification and normalized.clarification_question:
         clarification_block = f"\n\nУточнение:\n{normalized.clarification_question}"
 
-    async with cl.Step(name="Отбор результата", type="tool") as step:
+    async with cl.Step(name="Отбор результата") as step:
         step.output = "\n".join(normalized.explanation[:4]) or (
             normalized.clarification_question or "Агент завершил поиск без дополнительного пояснения."
         )
 
     await cl.Message(
         content=f"{normalized.final_answer}{explanation_block}{clarification_block}",
-        elements=side_elements,
+        elements=message_elements,
         author="PubChem Agent",
     ).send()

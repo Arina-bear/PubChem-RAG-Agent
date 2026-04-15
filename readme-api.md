@@ -34,6 +34,11 @@
 - Chainlit UI: `http://127.0.0.1:3000`
 - FastAPI API: `http://127.0.0.1:8000`
 
+Если agent иногда обрывается слишком рано, проверьте в `backend/.env`:
+
+- `LLM_REQUEST_TIMEOUT_SECONDS=90`
+- `AGENT_RUN_TIMEOUT_SECONDS=240`
+
 Если нужен только API:
 
 ```bash
@@ -56,7 +61,8 @@ uv run chainlit run src/chainlit_app.py --headless --host 127.0.0.1 --port 3000
 - `POST /api/query`
 - `POST /api/interpret`
 - `POST /api/agent`
-- LangChain tools для `name`, `smiles`, `formula`, `inchikey`, `mass_range`, `synonym`, `name_to_smiles`, `compound_summary`, `clarification`
+- LangChain tools для `name`, `smiles`, `formula`, `inchikey`, `mass_range`, `synonym`, `name_to_smiles`, `compound_summary`
+- уточнение теперь возвращается как часть структурированного agent response, а не как отдельный tool
 - Chainlit UI с `CompoundCard`, `tool trace`, streaming steps и Langfuse-ready tracing
 
 ## Что пока не включено

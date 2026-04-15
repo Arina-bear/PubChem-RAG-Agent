@@ -9,7 +9,7 @@ assistant_message_autoscroll = true
 [UI]
 name = "PubChem Agent"
 description = "LangChain + Chainlit interface for grounded PubChem compound search."
-cot = "tool_call"
+cot = "hidden"
 default_theme = "dark"
 language = "ru-RU"
 layout = "wide"

@@ -24,7 +24,10 @@ cp .env.example .env
 ```env
 LLM_DEFAULT_PROVIDER=modal_glm
 MODAL_GLM_API_KEY=...
-MODAL_GLM_MODEL=zai-org/GLM-5-FP8
+MODAL_GLM_MODEL=zai-org/GLM-5.1-FP8
+REQUEST_TIMEOUT_SECONDS=20
+LLM_REQUEST_TIMEOUT_SECONDS=90
+AGENT_RUN_TIMEOUT_SECONDS=240
 LANGFUSE_PUBLIC_KEY=...
 LANGFUSE_SECRET_KEY=...
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
@@ -97,12 +100,12 @@ uv run pytest -q
 
 ## Chainlit UI
 
-Новый UI построен через `Chainlit + LangChainCallbackHandler + cl.Step + cl.CustomElement`.
+Новый UI построен через `Chainlit + cl.Step + cl.CustomElement`.
 
 Что показывает интерфейс:
 
 - streamed agent session
-- `tool_call`-уровень chain-of-thought display
+- аккуратные шаги интерпретации и отбора результата без raw tool-call spam
 - карточку вещества `CompoundCard`
 - изображения структуры из PubChem
 - краткий tool trace
@@ -127,9 +130,8 @@ uv run pytest -q
 - `get_compound_summary`
 - `name_to_smiles`
 - `search_by_synonym`
-- `ask_user_for_clarification`
 
-Все tools объявлены нативно через `langchain.tools.tool` и `args_schema`, а не через самописный loop.
+Все tools объявлены нативно через `langchain.tools.tool` и `args_schema`, а не через самописный loop. Уточнение теперь возвращается как часть структурированного final response, а не как отдельный tool.
 
 ## LLM providers
 
@@ -138,7 +140,12 @@ uv run pytest -q
 - `modal_glm`
 - `openai`
 
-Оба провайдера подключаются через `ChatOpenAI` с OpenAI-compatible API. Для `modal_glm` backend использует `base_url=https://api.us-west-2.modal.direct/v1` и может отключать thinking через `MODAL_GLM_DISABLE_THINKING=true`.
+Оба провайдера подключаются через `ChatOpenAI` с OpenAI-compatible API. Для `modal_glm` backend использует `base_url=https://api.us-west-2.modal.direct/v1`, дефолтную модель `zai-org/GLM-5.1-FP8`, отключает parallel tool calls и при необходимости может отключать thinking через `MODAL_GLM_DISABLE_THINKING=true`.
+
+Для стабильности длинных agent runs сейчас разделены два таймаута:
+
+- `LLM_REQUEST_TIMEOUT_SECONDS` — лимит на один вызов модели
+- `AGENT_RUN_TIMEOUT_SECONDS` — лимит на весь tool-calling цикл целиком
 
 ## Langfuse
 

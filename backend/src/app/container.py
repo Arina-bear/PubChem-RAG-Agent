@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.adapter.pubchem_adapter import PubChemAdapter
+from app.agent.tracing import build_langfuse_client_from_settings
 from app.config import Settings, get_settings
 from app.services.agent_stream_service import AgentStreamService
 from app.services.agent_service import AgentService
@@ -24,6 +25,12 @@ class AppContainer:
     agent_stream_service: AgentStreamService
 
     async def close(self) -> None:
+        client = build_langfuse_client_from_settings(self.settings)
+        if client is not None:
+            try:
+                client.flush()
+            except Exception:
+                pass
         await self.transport.close()
 
 
