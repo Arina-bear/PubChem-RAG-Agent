@@ -50,7 +50,27 @@ async def fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
 @mcp.tool()
 async def search_by_name_pubchem(name: str, limit: int = 5) -> str:
 
-    """Search for compound by name in PubChem"""
+    """Search PubChem for compounds matching a chemical name.
+
+    Parameters
+    ----------
+    name : str
+        Chemical name to search for (e.g., "aspirin", "caffeine").
+    limit : int, optional
+        Maximum number of results to return, by default 5.
+
+    Returns
+    -------
+    str
+        JSON string with structure:
+        - Success: {"error": false, "query": "...", "results": [...], "count": N}
+        - Failure: {"error": true, "message": "...", "results": []}
+
+    Notes
+    -----
+    - Results include full compound properties (CID, IUPAC name, formula, weight).
+    - Name can be systematic, common, or trade name.
+    """
 
     async with httpx.AsyncClient(timeout=10) as client:
 
@@ -89,7 +109,27 @@ async def search_by_name_pubchem(name: str, limit: int = 5) -> str:
 
 @mcp.tool()
 async def  search_by_smiles_pubchem(smiles: str, limit: int = 5) -> str:
-    """Search for compound by SMILES in PubChem"""
+    """Search PubChem for compounds matching a SMILES string.
+
+    Parameters
+    ----------
+    smiles : str
+        SMILES string to search for.
+    limit : int, optional
+        Maximum number of results to return, by default 5.
+
+    Returns
+    -------
+    str
+        JSON string with structure:
+        - Success: {"error": false, "query": "...", "results": [...], "count": N}
+        - Failure: {"error": true, "message": "...", "results": []}
+
+    Notes
+    -----
+    - Results include CID, IUPAC name, formula, and molecular weight.
+    - Returns JSON string even on error (no exceptions raised).
+    """
     async with httpx.AsyncClient(timeout=10) as client:
 
         try:
@@ -126,7 +166,28 @@ async def  search_by_smiles_pubchem(smiles: str, limit: int = 5) -> str:
 
 @mcp.tool()
 async def search_by_formula_pubchem(formula: str, limit: int = 5) -> str:
-    """Search for compounds by molecular formula in PubChem"""
+    """Search PubChem for compounds matching a molecular formula.
+
+    Parameters
+    ----------
+    formula : str
+        Molecular formula to search for (e.g., "C6H12O6").
+    limit : int, optional
+        Maximum number of results to return, by default 5.
+
+    Returns
+    -------
+    str
+        JSON string with structure:
+        - Success: {"error": false, "query": "...", "query_type": "formula", "results": [{"cid": ..., "name": ...}], "count": N}
+        - Failure: {"error": true, "message": "...", "results": []}
+
+    Notes
+    -----
+    - Uses PubChem fastformula endpoint for efficient formula-based search.
+    - Returns only CID and compound name in results (simplified output).
+    - Empty formula input returns error immediately.
+    """
     
     if not formula or not formula.strip():
         return json.dumps({"error": True, "message": "Formula cannot be empty", "results": []})
