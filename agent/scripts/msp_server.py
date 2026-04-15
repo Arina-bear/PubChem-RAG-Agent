@@ -5,6 +5,7 @@ import httpx
 #from schemas import (SearchByNameInput, SearchBySMILESInput, SearchByFormulaInput)
 import json
 import asyncio
+from app.errors.models import AppError, ErrorCode
 
 "Создание mcp-сервера"""
 
@@ -45,7 +46,28 @@ async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
         "weight": "N/A"
     }
 
+def _error_payload(error: AppError) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "error": {
+            "code": error.code.value,
+            "message": error.message,
+            "retriable": error.retriable,
+            "details": error.details or None,
+        },
+    }
 
+
+def _unexpected_error_payload(error: Exception) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "error": {
+            "code": ErrorCode.UPSTREAM_UNAVAILABLE.value,
+            "message": f"Непредвиденная ошибка tool execution: {error}",
+            "retriable": False,
+            "details": None,
+        },
+    }
 @mcp.tool()
 async def search_by_name_pubchem(name: str, limit: int = 5) -> str:
 

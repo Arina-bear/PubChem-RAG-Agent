@@ -68,6 +68,7 @@ async def _search_matches(
             for cid in cids[:limit]
         ]
     )
+    
     matches = [to_match_card(overview).model_dump(mode="json") for _, overview in snapshots_and_overviews]
     return {
         "ok": True,
