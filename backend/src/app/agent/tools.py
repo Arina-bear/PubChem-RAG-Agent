@@ -121,27 +121,9 @@ class SearchByFormulaArgs(BaseModel):
         return cleaned
 
 
-class SearchByInChIKeyArgs(BaseModel):
-    inchikey: str = Field(min_length=1, max_length=64, description="InChIKey string to resolve in PubChem.")
-    limit: int = Field(default=5, ge=1, le=10, description="Maximum number of candidate compounds to return.")
-
-    @field_validator("inchikey")
-    @classmethod
-    def strip_inchikey(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("inchikey must not be blank")
-        return cleaned
 
 
-class SearchByMassRangeArgs(BaseModel):
-    min_mass: float = Field(description="Lower bound of the mass range.")
-    max_mass: float = Field(description="Upper bound of the mass range.")
-    mass_type: Literal["molecular_weight", "exact_mass", "monoisotopic_mass"] = Field(
-        default="molecular_weight",
-        description="Which PubChem mass field to search by.",
-    )
-    limit: int = Field(default=5, ge=1, le=10, description="Maximum number of candidate compounds to return.")
+
 
 
 class CompoundSummaryArgs(BaseModel):

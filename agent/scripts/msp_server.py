@@ -1,7 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 import requests
 import urllib.parse
-import logging
 import httpx
 #from schemas import (SearchByNameInput, SearchBySMILESInput, SearchByFormulaInput)
 import json
@@ -11,7 +10,7 @@ import asyncio
 
 mcp = FastMCP("pubchem-tools")
 
-async def fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
+async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
     """
     Fetch compound properties from PubChem by CID.
     
@@ -95,7 +94,7 @@ async def search_by_name_pubchem(name: str, limit: int = 5) -> str:
         if not cid_list:
             return json.dumps({"error": True, "message": f"No compounds found for '{name}'", "results": []})
         
-        results = await asyncio.gather(*[fetch_props(cid, client) for cid in cid_list])
+        results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
         
         return json.dumps({
             "error": False,
@@ -152,7 +151,7 @@ async def  search_by_smiles_pubchem(smiles: str, limit: int = 5) -> str:
         if not cid_list:
             return json.dumps({"error": True, "message": f"No compounds found for SMILES '{smiles}'", "results": []})
         
-        results = await asyncio.gather(*[fetch_props(cid, client) for cid in cid_list])
+        results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
         
         return json.dumps({
             "error": False,
@@ -210,7 +209,7 @@ async def search_by_formula_pubchem(formula: str, limit: int = 5) -> str:
         if not cid_list:
             return json.dumps({"error": True, "message": f"No compounds found for formula '{formula}'", "results": []})
         
-        results = await asyncio.gather(*[fetch_props(cid, client) for cid in cid_list])
+        results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
         
         simplified_results = [
             {"cid": r["cid"], "name": r["name"]} 
@@ -225,6 +224,79 @@ async def search_by_formula_pubchem(formula: str, limit: int = 5) -> str:
             "count": len(results)
         }, ensure_ascii=False)
 
+
+#tool 4
+@mcp.tool()
+async def search_compound_by_inchikey(inchikey: str, limit: int = 5) -> str:
+    """
+    Search PubChem compounds by exact InChIKey.
+    
+    Example: "BSYNRYMUTXBXSQ-UHFFFAOYSA-N" for aspirin
+    
+    Args:
+        inchikey: InChIKey string (27-character identifier)
+        limit: Maximum number of results (1-10, default: 5)
+    """
+    if not inchikey or not inchikey.strip():
+        return json.dumps({
+            "error": True,
+            "message": "InChIKey cannot be empty",
+            "results": []
+        }, ensure_ascii=False)
+    
+    limit = max(1, min(limit, 10))
+    
+    async with httpx.AsyncClient(timeout=10) as client:
+
+        try:
+            encoded = urllib.parse.quote(inchikey.strip())
+            url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{encoded}/cids/JSON"
+            response = await client.get(url)
+            
+            if response.status_code != 200:
+                return json.dumps({
+                    "error": True,
+                    "message": f"InChIKey '{inchikey}' not found",
+                    "results": []
+                }, ensure_ascii=False)
+            
+            data = response.json()
+            cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
+            
+            if not cid_list:
+                return json.dumps({
+                    "error": True,
+                    "message": f"No compounds found for InChIKey '{inchikey}'",
+                    "results": []
+                }, ensure_ascii=False)
+            
+
+            results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
+            
+            return json.dumps({
+                "error": False,
+                "query": inchikey,
+                "query_type": "inchikey",
+                "results": results,
+                "count": len(results)
+            }, ensure_ascii=False)
+            
+        except httpx.TimeoutException:
+            return json.dumps({
+                "error": True,
+                "error_type": "timeout",
+                "message": "Request timed out",
+                "retryable": True,
+                "results": []
+            }, ensure_ascii=False)
+        
+        except Exception as e:
+            return json.dumps({
+                "error": True,
+                "error_type": "internal_error",
+                "message": str(e),
+                "results": []
+            }, ensure_ascii=False)
 
 if __name__ == "__main__":#запуск цикла событий
     mcp.run(transport="stdio")
