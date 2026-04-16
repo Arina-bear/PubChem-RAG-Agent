@@ -3,7 +3,7 @@ from typing import Type, Optional, Any, Dict
 import requests
 import urllib.parse
 import logging
-from schemas import (SearchByNameInput, SearchBySMILESInput, SearchByFormulaInput)
+from backend.src.app.schemas.schemas import (SearchByNameInput, SearchBySMILESInput, SearchByFormulaInput)
 from pydantic import BaseModel
 from langchain.callbacks import get_callback_manager
 

@@ -189,4 +189,38 @@ class SearchByInChIKeyArgs(BaseModel):
          raise ValueError("InChIKey must not be blank")
         
         return cleaned
+
+
+###############################
+##########################
+##new############
+class CompoundSummaryArgs(BaseModel):
+    cid: int = Field(gt=0, description="PubChem compound CID.")
+
+
+class NameToSmilesArgs(BaseModel):
+    name: str = Field(min_length=1, max_length=160, description="Compound name to resolve to canonical SMILES.")
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("name must not be blank")
+        return cleaned
+
+
+class SearchBySynonymArgs(BaseModel):
+    synonym: str = Field(min_length=1, max_length=160, description="Alternative name or synonym for the compound.")
+    limit: int = Field(default=5, ge=1, le=10, description="Maximum number of candidate compounds to return.")
+
+    @field_validator("synonym")
+    @classmethod
+    def strip_synonym(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("synonym must not be blank")
+        return cleaned
+
+
     

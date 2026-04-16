@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     )
 
     # OpenAI
-    openai_api_key: str###
-    openai_model: str = "gpt-4o"######
+    openai_api_key: str = "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" 
+    openai_model: str = "gpt-4.1-mini"######
     openai_temperature: float = 0.0
 
     # MCP Server
