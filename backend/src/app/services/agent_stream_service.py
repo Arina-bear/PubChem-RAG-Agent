@@ -18,13 +18,12 @@ class AgentStreamService:
     def __init__(
         self,
         settings: Settings,
-        adapter: PubChemAdapter,
         *,
         runtime_factory: Callable[..., PreparedAgentRuntime] = prepare_agent_runtime,
         manual_trace_recorder: Callable[..., None] = record_manual_agent_trace,
     ) -> None:
+        
         self.settings = settings
-        self.adapter = adapter
         self.runtime_factory = runtime_factory
         self.manual_trace_recorder = manual_trace_recorder
 
@@ -36,7 +35,9 @@ class AgentStreamService:
         extra_callbacks: list[Any] | None = None,
         metadata_overrides: dict[str, Any] | None = None,
     ) -> AgentResponseEnvelope:
+        
         resolved_trace_id = trace_id or uuid.uuid4().hex
+
         if is_capability_question(request.text):
             provider_name, model_name = resolve_provider_model_name(self.settings, request.provider)
             response = build_capability_response(
@@ -59,9 +60,9 @@ class AgentStreamService:
                 metadata=metadata_overrides,
             )
             return response
+        
         runtime = self.runtime_factory(
             self.settings,
-            self.adapter,
             provider=request.provider,
             trace_id=resolved_trace_id,
         )
@@ -70,6 +71,7 @@ class AgentStreamService:
         callbacks = list(invoke_config.get("callbacks", []))
         if extra_callbacks:
             callbacks.extend(extra_callbacks)
+
         if callbacks:
             invoke_config["callbacks"] = callbacks
 
@@ -92,9 +94,11 @@ class AgentStreamService:
             )
         except Exception as exc:
             raise normalize_agent_exception(exc) from exc
+        
         finally:
             runtime.tracing.flush()
-
+            await runtime.stop()
+#финальный ответ
         tool_trace = [
             AgentToolTraceEntry(
                 step=event.step,

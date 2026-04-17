@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from app.agent.tools import PUBCHEM_TOOL_CATALOG
 from app.schemas.agent import (
     AgentExecutionInfo,
     AgentNormalizedPayload,
@@ -9,6 +8,7 @@ from app.schemas.agent import (
     ParsedAgentQuery,
 )
 from app.schemas.common import PresentationHints
+from typing import Any
 
 
 _RUSSIAN_MARKERS = (
@@ -44,13 +44,20 @@ def build_capability_response(
     request_text: str,
     provider: LLMProviderName,
     model_name: str,
+    mcp_tools: list[Any],
 ) -> AgentResponseEnvelope:
+    
+    """ """
     is_russian = any("а" <= char <= "я" or char == "ё" for char in request_text.casefold())
-    lines = [
-        "У меня есть такие PubChem-инструменты:" if is_russian else "I have these PubChem tools:",
-    ]
-    for item in PUBCHEM_TOOL_CATALOG:
-        lines.append(f"- `{item['name']}` — {item['summary']}")
+
+    header = "У меня есть такие инструменты через MCP:" if is_russian else "I have these MCP tools:"
+
+    lines = [header]
+
+    #получаем инструменты от mcp-сервера объектами langchain
+    for tool in mcp_tools:
+        description = tool.description.split('\n')[0] # Берем только первую строку описания
+        lines.append(f"- `{tool.name}` — {description}")
 
     if is_russian:
         lines.extend(
@@ -66,6 +73,7 @@ def build_capability_response(
         final_answer = "\n".join(lines)
         intent = "описание возможностей PubChem-агента"
         language = "ru"
+
     else:
         lines.extend(
             [
@@ -77,28 +85,31 @@ def build_capability_response(
                 "4. If the request is underspecified, I ask one concise clarification question instead of guessing.",
             ]
         )
+
         final_answer = "\n".join(lines)
         intent = "describe PubChem agent capabilities"
         language = "en"
 
     normalized = AgentNormalizedPayload(
-        request=AgentExecutionInfo(
+        request = AgentExecutionInfo(
             provider=provider,
             model=model_name,
             text=request_text,
         ),
+
         parsed_query=ParsedAgentQuery(
             intent=intent,
             language=language,
         ),
-        final_answer=final_answer,
-        explanation=[],
-        needs_clarification=False,
-        clarification_question=None,
-        matches=[],
-        compounds=[],
-        tool_trace=[],
-        referenced_cids=[],
+
+        final_answer = final_answer,
+        explanation = [],
+        needs_clarification = False,
+        clarification_question = None,
+        matches = [],
+        compounds = [],
+        tool_trace = [],
+        referenced_cids = [],
     )
 
     return AgentResponseEnvelope(

@@ -3,17 +3,14 @@ from collections.abc import Callable
 import asyncio
 from typing import Any
 import uuid
-
 from langchain_core.messages import AIMessage
 
-from app.adapter.pubchem_adapter import PubChemAdapter
 from app.agent.error_mapper import normalize_agent_exception
 from app.agent.meta import build_capability_response, is_capability_question
 from app.agent.model_factory import resolve_provider_model_name
 from app.agent.runtime import PreparedAgentRuntime, prepare_agent_runtime
 from app.agent.tracing import record_manual_agent_trace
 from app.config import Settings
-from app.errors.models import AppError, ErrorCode
 from app.schemas.agent import (
     AgentExecutionInfo,
     AgentNormalizedPayload,
@@ -24,6 +21,7 @@ from app.schemas.agent import (
     ParsedMassRange,
 )
 from app.schemas.common import CompoundMatchCard, CompoundOverview, PresentationHints, WarningMessage
+from app.services.agent_service import build_agent_response_envelope
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 
@@ -31,24 +29,18 @@ class AgentService:
     def __init__(
         self,
         settings: Settings,
-        # Мы будем передавать инструменты, полученные от MCP клиента
-        mcp_client: MultiServerMCPClient, 
         *,
         runtime_factory: Callable[..., PreparedAgentRuntime] = prepare_agent_runtime,
         manual_trace_recorder: Callable[..., None] = record_manual_agent_trace,
     ) -> None:
-        
         self.settings = settings
-        self.mcp_client = mcp_client
         self.runtime_factory = runtime_factory
         self.manual_trace_recorder = manual_trace_recorder
 
     async def execute(self, request: AgentRequest, *, trace_id: str | None = None) -> AgentResponseEnvelope:
-
-        """описание """
-
         resolved_trace_id = trace_id or uuid.uuid4().hex        
-        #check similary question
+        
+        # 1. Обработка вопросов о возможностях (Capabilities)
         if is_capability_question(request.text):
             provider_name, model_name = resolve_provider_model_name(self.settings, request.provider)
             response = build_capability_response(
@@ -63,24 +55,20 @@ class AgentService:
                 name="pubchem-agent-capabilities",
                 provider=provider_name,
                 model_name=model_name,
-                input_payload={
-                    "text": request.text,
-                    "provider": provider_name,
-                },
+                input_payload={"text": request.text, "provider": provider_name},
                 output_payload=response.model_dump(mode="json"),
             )
             return response
         
-        tools = await self.mcp_client.get_tools()#динамическое получение тулов
-            
+
         runtime = self.runtime_factory(
             self.settings,
-            tools, 
             provider=request.provider,
             trace_id=resolved_trace_id,
         )
 
         try:
+
             result = await asyncio.wait_for(
                 runtime.agent.ainvoke(
                     {"messages": [{"role": "user", "content": request.text}]},
@@ -92,10 +80,14 @@ class AgentService:
                     30.0,
                 ),
             )
+
         except Exception as exc:
             raise normalize_agent_exception(exc) from exc
+        
         finally:
+
             runtime.tracing.flush()
+            await runtime.stop()
 
         tool_trace = [
             AgentToolTraceEntry(
@@ -107,6 +99,7 @@ class AgentService:
             )
             for event in runtime.recorder.events
         ]
+        
         return build_agent_response_envelope(
             trace_id=resolved_trace_id,
             request=request,
@@ -114,97 +107,6 @@ class AgentService:
             result=result,
             tool_trace=tool_trace,
         )
-
-
-def build_agent_response_envelope(
-    *,
-    trace_id: str,
-    request: AgentRequest,
-    runtime: PreparedAgentRuntime,
-    result: dict[str, Any],
-    tool_trace: list[AgentToolTraceEntry],
-) -> AgentResponseEnvelope:
-    "" ""
-    matches, compounds = _collect_compounds(tool_trace)
-    structured = result.get("structured_response")
-
-    if structured is not None:
-        normalized = AgentNormalizedPayload(
-            request=AgentExecutionInfo(
-                provider=runtime.provider,
-                model=runtime.model_name,
-                text=request.text,
-            ),
-            parsed_query=structured.parsed_query,
-            final_answer=structured.final_answer or _fallback_answer(result),
-            explanation=structured.explanation,
-            needs_clarification=structured.needs_clarification,
-            clarification_question=structured.clarification_question,
-            matches=matches,
-            compounds=compounds,
-            tool_trace=tool_trace,
-            referenced_cids=structured.referenced_cids,
-        )
-        raw_payload = None
-        if request.include_raw:
-            raw_payload = {
-                "structured_response": structured.model_dump(mode="json"),
-                "message_count": len(result.get("messages", [])),
-            }
-    else:
-        final_answer = _fallback_answer(result)
-        if not final_answer.strip():
-            final_answer = _fallback_compound_answer(request.text, matches, compounds)
-        parsed_query = _infer_parsed_query(request.text, tool_trace)
-        needs_clarification, clarification_question = _infer_clarification(final_answer, matches, compounds)
-        referenced_cids = _collect_referenced_cids(matches, compounds)
-        normalized = AgentNormalizedPayload(
-            request=AgentExecutionInfo(
-                provider=runtime.provider,
-                model=runtime.model_name,
-                text=request.text,
-            ),
-            parsed_query=parsed_query,
-            final_answer=final_answer,
-            explanation=_infer_explanation(
-                request.text,
-                parsed_query=parsed_query,
-                matches=matches,
-                compounds=compounds,
-                tool_trace=tool_trace,
-                needs_clarification=needs_clarification,
-            ),
-            needs_clarification=needs_clarification,
-            clarification_question=clarification_question,
-            matches=matches,
-            compounds=compounds,
-            tool_trace=tool_trace,
-            referenced_cids=referenced_cids,
-        )
-        raw_payload = None
-        if request.include_raw:
-            raw_payload = {
-                "structured_response": None,
-                "message_count": len(result.get("messages", [])),
-                "final_answer_source": "messages",
-            }
-
-    warnings = _build_warnings(normalized)
-
-    return AgentResponseEnvelope(
-        trace_id=trace_id,
-        source="langchain-agent",
-        status="success",
-        raw=raw_payload,
-        normalized=normalized,
-        presentation_hints=PresentationHints(
-            active_tab="answer",
-            available_tabs=["answer", "compounds", "analysis", "tools", "json"],
-        ),
-        warnings=warnings,
-        error=None,
-    )
-
 
 def _fallback_answer(result: dict[str, Any]) -> str:
     messages = result.get("messages", [])
@@ -266,6 +168,7 @@ def _infer_parsed_query(request_text: str, tool_trace: list[AgentToolTraceEntry]
         name = event.tool_name
         args = event.arguments
         #проверка на вхождение строки в название
+
         if "search_by_name_pubchem" in name or "search_by_name" in name:
             parsed.intent = "lookup compound by name"
             parsed.compound_name = args.get("name")
@@ -280,7 +183,7 @@ def _infer_parsed_query(request_text: str, tool_trace: list[AgentToolTraceEntry]
 
         elif "search_compound_by_inchikey" in name or "search_by_inchikey" in name:
             parsed.intent = "lookup compound by InChIKey"
-            parsed.formula = args.get("InChIKey")
+            parsed.synonym_hint = args.get("InChIKey")
 
      #   elif event.tool_name == "search_by_synonym":
       #      parsed.intent = "lookup compound by synonym"

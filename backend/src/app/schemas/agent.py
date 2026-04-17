@@ -48,7 +48,7 @@ class ParsedMassRange(BaseModel):
 
 
 class ParsedAgentQuery(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra = "forbid")
 
     intent: str = Field(description="Short description of what the user is trying to do.")
     language: str | None = Field(default=None, description="Language the user appears to be using.")
@@ -98,6 +98,8 @@ class AgentToolTraceEntry(BaseModel):
 
 
 class AgentNormalizedPayload(BaseModel):
+    """ нормализация данных для фронтенда"""
+
     request: AgentExecutionInfo
     parsed_query: ParsedAgentQuery
     final_answer: str
@@ -120,6 +122,7 @@ class AgentResponseEnvelope(BaseModel):
     status: Literal["success", "error"] = "success"
     raw: dict[str, Any] | None = None
     normalized: AgentNormalizedPayload | None = None
+
     presentation_hints: PresentationHints = Field(
         default_factory=lambda: PresentationHints(
             active_tab="answer",
@@ -128,6 +131,8 @@ class AgentResponseEnvelope(BaseModel):
     )
     warnings: list[WarningMessage] = Field(default_factory=list)
     error: ErrorPayload | None = None
+
+
 
     class Agent_:
 
