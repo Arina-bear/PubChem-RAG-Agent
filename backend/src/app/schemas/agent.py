@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.common import CompoundMatchCard, CompoundOverview, ErrorPayload, PresentationHints, WarningMessage
 
 
+import json
 LLMProviderName = Literal["openai", "modal_glm"]
 
 
@@ -17,6 +18,7 @@ class AgentRequest(BaseModel):
     @classmethod
     def strip_text(cls, value: str) -> str:
         cleaned = value.strip()
+
         if not cleaned:
             raise ValueError("text must not be blank")
         return cleaned
@@ -90,10 +92,14 @@ class AgentNormalizedPayload(BaseModel):
     tool_trace: list[AgentToolTraceEntry] = Field(default_factory=list)
     referenced_cids: list[int] = Field(default_factory=list)
 
+class AgentRequest(BaseModel):
+    text: str = Field(min_length=1, description="Natural-language PubChem request from the user.")
+    provider: LLMProviderName | None = Field(default=None, description="Optional provider override for the agent.")
+    include_raw: bool = Field(default=True, description="Include compact raw debugging payload in the response.")
 
 class AgentResponseEnvelope(BaseModel):
     trace_id: str
-    source: Literal["langchain-agent"] = "langchain-agent"
+   # source: Literal["langchain-agent"] = "langchain-agent"
     status: Literal["success", "error"] = "success"
     raw: dict[str, Any] | None = None
     normalized: AgentNormalizedPayload | None = None
@@ -105,3 +111,48 @@ class AgentResponseEnvelope(BaseModel):
     )
     warnings: list[WarningMessage] = Field(default_factory=list)
     error: ErrorPayload | None = None
+
+    class Agent_:
+
+        """
+            This agent doesn't implement the tools itself - it calls the existing
+            MCP server tools (search_by_name_pubchem, search_by_smiles_pubchem, etc.)
+        """
+
+        def __init__(self, mcp_client, llm_provider: str = "openai", model: str = "gpt-4o-mini"):
+            self.mcp_client = mcp_client
+            self.llm_provider = llm_provider
+            self.model = model
+            self.tool_trace: list[AgentToolTraceEntry] = []
+            self.current_step = 0
+            
+        def _add_trace(self, tool_name: str, arguments: dict[str, Any], result: dict[str, Any] | None = None, error: str | None = None):
+
+            """Add entry to tool trace"""
+
+            self.current_step += 1
+            self.tool_trace.append(AgentToolTraceEntry(
+            step=self.current_step,
+            tool_name = tool_name,
+            arguments = arguments,
+            result = result,
+            error_message = error
+        ))
+            
+#вызов тулов
+        async def _call_mcp_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
+            """
+            Call an MCP tool and parse its JSON response.
+        
+            Args:
+                tool_name: Name of the MCP tool (e.g., "search_by_name_pubchem")
+                **kwargs: Arguments for the tool
+            
+            Returns:
+            Parsed JSON response as dict
+        """
+            result = await self.mcp_client.call_tool(tool_name, kwargs)
+        
+            if isinstance(result, str):
+                return json.loads(result)
+            return result

@@ -15,7 +15,9 @@ class ResolvedChatModel:
 
 
 def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | None = None) -> tuple[LLMProviderName, str]:
+    """ """
     resolved_provider = provider or settings.llm_default_provider
+
     if resolved_provider not in {"openai", "modal_glm"}:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
@@ -24,10 +26,12 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
         )
     if resolved_provider == "openai":
         return "openai", settings.openai_model
+    
     return "modal_glm", settings.modal_glm_model
 
 
 def build_chat_model(settings: Settings, provider: LLMProviderName | None = None) -> ResolvedChatModel:
+    """ """
     resolved_provider, model_name = resolve_provider_model_name(settings, provider)
     model_kwargs = {"parallel_tool_calls": False}
 

@@ -11,14 +11,14 @@ async def main():
     async with MultiServerMCPClient({                      
         "pubchem": {
             "command": "python",
-            "args": ["pubchem_mcp_server.py"],
+            "args": ["msp_server.py"],
             "transport": "stdio",
         }
     }) as client:
         
         tools = await client.get_tools()
         llm = ChatOpenAI(
-            model="gpt-4o",  # ВЫБРАТЬ LLM
+            model="gpt-4o-mini",  
             temperature=0
         )
         prompt=SYSTEM_PROMPT
