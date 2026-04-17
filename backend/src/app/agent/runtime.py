@@ -12,7 +12,7 @@ MAIN FUNCTIONS:
 
 This file separates the infrastructure startup logic from the implementation of the tools themselves.
 """
-import json
+import json, logging
 from dataclasses import dataclass
 from typing import Any
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -37,6 +37,16 @@ class PreparedAgentRuntime:
     provider: LLMProviderName
     model_name: str
     tracing: LangChainTracingConfig
+    async def stop(self):
+        try:
+            await self.mcp_client.disconnect()
+            if self.tracing.client:
+                self.tracing.flush()
+            logging.info("MCP runtime successfully shut down.")
+
+        except Exception as e:
+            logging.error(f"Error during MCP runtime shutdown: {e}")
+        
 
 
 def _build_duplicate_tool_call_guard() -> Any:
@@ -114,7 +124,13 @@ async def prepare_agent_runtime(
             "transport": "stdio",
         }
     })
-    await mcp_client.connect() 
+    try:
+     await mcp_client.connect()
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc(f"MCP Server failed to start: {e}")
+
     mcp_tools = await mcp_client.get_tools()
 
     resolved_model = build_chat_model(settings)
@@ -153,4 +169,5 @@ async def prepare_agent_runtime(
         provider=resolved_model.provider,
         model_name=resolved_model.model_name,
         tracing=tracing,
+        mcp_client=mcp_client
     )
