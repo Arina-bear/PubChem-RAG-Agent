@@ -1,3 +1,20 @@
+"""
+MODULE: PubChem Agent Schemas & Execution Logic
+---------------------------------------------
+PURPOSE:
+Defines the data architecture and message exchange protocols for the AI agent
+
+This file contains Pydantic models for validating incoming requests, structuring neural network responses, and tracing tool invocations.
+
+MAIN COMPONENTS:
+- AgentRequest: Validates incoming text and provider parameters.
+- ParsedAgentQuery: Schema for understanding user intent (name, SMILES, formula).
+- AgentFinalStructuredResponse: Strict LLM output format (response, rationale, CIDs).
+- AgentNormalizedPayload: Assembles final data (search results + analytics).
+- Agent_ (Class): Internal logic for invoking tools via the MCP client and maintaining a history of steps (trace).
+
+This file provides typing and a "contract" between the frontend, agent, and MCP server.
+"""
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
