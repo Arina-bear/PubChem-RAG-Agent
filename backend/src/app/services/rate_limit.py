@@ -1,3 +1,8 @@
+""" Данный модуль реализует ограничитель частоты запросов (Rate Limiter) 
+    на основе алгоритма «скользящего окна» (Sliding Window). Он обеспечивает асинхронный контроль нагрузки, 
+    предотвращая превышение заданного лимита событий 
+    определенный интервал времени с использованием библиотеки anyio"""
+
 import time
 from collections import deque
 
@@ -15,10 +20,11 @@ class SlidingWindowRateLimiter:
         while True:
             async with self._lock:
                 now = time.monotonic()
+
                 while self._events and now - self._events[0] >= self.window_seconds:
                     self._events.popleft()
 
-                if len(self._events) < self.limit:
+                if len(self._events) < self.limit:#ограничение на количество запросов к pubchem
                     self._events.append(now)
                     return
 
