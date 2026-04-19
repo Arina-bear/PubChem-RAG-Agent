@@ -132,8 +132,6 @@ class AgentResponseEnvelope(BaseModel):
     warnings: list[WarningMessage] = Field(default_factory=list)
     error: ErrorPayload | None = None
 
-
-
     class Agent_:
 
         """

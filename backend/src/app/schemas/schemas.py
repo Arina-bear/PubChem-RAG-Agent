@@ -5,12 +5,9 @@ These schemas define the structure and validation rules for all
 PubChem search tools used by the chemistry agent.
 """
 
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
-import langchain
-from pydantic import BaseModel, Field
-from typing import Any, Literal
+from pydantic import BaseModel, Field, field_validator
+from typing import  Literal
 def clean_string(value: str) -> str:
-
     return value.strip()
 
 
@@ -179,7 +176,7 @@ class SearchByInChIKeyArgs(BaseModel):
     inchikey: str = Field(min_length=1, max_length=64, description="InChIKey string to resolve in PubChem.")
     limit: int = Field(default=5, ge=1, le=10, description="Maximum number of candidate compounds to return.")
 
-    @field_validator("inchikey", mode="before")
+    @field_validator("inchikey", mode = "before")
     @classmethod
     def strip_inchikey(cls, value: str) -> str:
         cleaned = clean_string(value)

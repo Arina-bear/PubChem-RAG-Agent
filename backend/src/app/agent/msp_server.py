@@ -3,7 +3,6 @@ import requests
 import urllib.parse
 from typing import Any
 import httpx
-#from schemas import (SearchByNameInput, SearchBySMILESInput, SearchByFormulaInput)
 import json
 import asyncio
 
