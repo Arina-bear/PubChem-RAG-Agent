@@ -7,8 +7,11 @@ router = APIRouter(tags=["health"])
 @router.get("/api/health")
 async def health(request: Request) -> dict:
     container = request.app.state.container
+    mcp_client = container.mcp_client
+    mcp_status = "connected" if mcp_client and mcp_client.is_running else "disconnected"
     return {
         "status": "ok",
+       "mcp_connection": mcp_status,
         "version": container.settings.api_version,
         "environment": container.settings.environment,
         "upstream": {

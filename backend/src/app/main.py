@@ -17,20 +17,39 @@ from app.errors.normalizer import build_agent_error_response, build_interpret_er
 
 
 def create_app(container_override: AppContainer | None = None) -> FastAPI:
+    """Создаёт и конфигурирует экземпляр приложения FastAPI.
+
+    Функция инкапсулирует логику инициализации веб-сервиса: от настройки CORS 
+    и промежуточного ПО (middleware) до регистрации маршрутов и глобальных обработчиков 
+    исключений. Особое внимание уделяется управлению жизненным циклом (lifespan) 
+    для корректного запуска и остановки контейнера зависимостей.
+
+    Args:
+        container_override (AppContainer | None, optional): Возможность передать 
+            преднастроенный контейнер зависимостей. Полезно для интеграционного 
+            тестирования (например, для подмены реальных сервисов моками).
+
+    Returns:
+        FastAPI: Полностью настроенный экземпляр приложения, готовый к запуску 
+            через ASGI-сервер (например, uvicorn).
+
+    """
     settings = get_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         container = container_override or build_container(settings)
         app.state.container = container
+    
         try:
             yield
         finally:
+
             close = getattr(container, "close", None)
             if callable(close):
                 result = close()
                 if hasattr(result, "__await__"):
-                    await result
+                  await result
 
     app = FastAPI(
         title=settings.app_name,
@@ -55,6 +74,8 @@ def create_app(container_override: AppContainer | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        print(f"VALIDATION DEBUG: {exc.errors()}")
+
         app_error = AppError(
             ErrorCode.VALIDATION_ERROR,
             "Запрос не прошёл валидацию.",

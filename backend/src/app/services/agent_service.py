@@ -2,7 +2,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 import asyncio
 from typing import Any
-import uuid
+import uuid, json
 from langchain_core.messages import AIMessage
 
 from app.agent.error_mapper import normalize_agent_exception
@@ -18,29 +18,39 @@ from app.schemas.agent import (
     AgentResponseEnvelope,
     AgentToolTraceEntry,
     ParsedAgentQuery,
-    ParsedMassRange,
+    AgentFinalStructuredResponse,
 )
+from app.errors.models import AppError, ErrorCode
 from app.schemas.common import CompoundMatchCard, CompoundOverview, PresentationHints, WarningMessage
-from app.services.agent_service import build_agent_response_envelope
 from langchain_mcp_adapters.client import MultiServerMCPClient
-
+from app.schemas.query import QueryRequest
+import logging
+logger = logging.getLogger(__name__)
+MCP_LOOKUP_MAP = {
+    "search_by_name_pubchem": "name",
+    "search_by_smiles_pubchem": "smiles",
+    "get_by_cid": "cid",
+    "search_by_formula_pubchem": "formula",
+    "search_compound_by_inchikey": "inchikey"
+}
 
 class AgentService:
     def __init__(
         self,
         settings: Settings,
         *,
+        mcp_client: MultiServerMCPClient,
         runtime_factory: Callable[..., PreparedAgentRuntime] = prepare_agent_runtime,
         manual_trace_recorder: Callable[..., None] = record_manual_agent_trace,
     ) -> None:
         self.settings = settings
+        self.mcp_client = mcp_client
         self.runtime_factory = runtime_factory
         self.manual_trace_recorder = manual_trace_recorder
 
     async def execute(self, request: AgentRequest, *, trace_id: str | None = None) -> AgentResponseEnvelope:
         resolved_trace_id = trace_id or uuid.uuid4().hex        
         
-        # 1. Обработка вопросов о возможностях (Capabilities)
         if is_capability_question(request.text):
             provider_name, model_name = resolve_provider_model_name(self.settings, request.provider)
             response = build_capability_response(
@@ -49,6 +59,7 @@ class AgentService:
                 provider=provider_name,
                 model_name=model_name,
             )
+
             self.manual_trace_recorder(
                 self.settings,
                 trace_id=resolved_trace_id,
@@ -60,47 +71,39 @@ class AgentService:
             )
             return response
         
+        async with self.runtime_factory(
+            settings=self.settings,
+            trace_id=trace_id,
+            mcp_client=self.mcp_client, 
+            provider=request.provider
+        ) as runtime:
+            logger.info(f"--- [AgentService] Runtime создан: provider {request.provider}, настройки: {self.settings}")
 
-        runtime = self.runtime_factory(
-            self.settings,
-            provider=request.provider,
-            trace_id=resolved_trace_id,
-        )
-
-        try:
-
-            result = await asyncio.wait_for(
+            try:
+                result = await asyncio.wait_for(
                 runtime.agent.ainvoke(
                     {"messages": [{"role": "user", "content": request.text}]},
                     config=runtime.invoke_config,
+                    
                 ),
                 timeout=max(
                     self.settings.agent_run_timeout_seconds,
                     self.settings.llm_request_timeout_seconds,
-                    30.0,
+                    130.0,
                 ),
             )
-
-        except Exception as exc:
-            raise normalize_agent_exception(exc) from exc
-        
-        finally:
-
-            runtime.tracing.flush()
-            await runtime.stop()
-
-        tool_trace = [
-            AgentToolTraceEntry(
-                step=event.step,
-                tool_name=event.tool_name,
-                arguments=event.arguments,
-                result=event.result,
-                error_message=event.error_message,
+                tool_trace = [
+                AgentToolTraceEntry(
+                step = event.step,
+                tool_name = event.tool_name,
+                arguments = event.arguments,
+                result = event.result,
+                error_message = event.error_message,
             )
             for event in runtime.recorder.events
         ]
         
-        return build_agent_response_envelope(
+                return build_agent_response_envelope(
             trace_id=resolved_trace_id,
             request=request,
             runtime=runtime,
@@ -108,7 +111,25 @@ class AgentService:
             tool_trace=tool_trace,
         )
 
+            except asyncio.TimeoutError:
+                logger.error("Агент превысил лимит времени (Timeout)")
+                raise AppError(ErrorCode.TIMEOUT, "Агент слишком долго думал")
+         
+            except Exception as exc:
+                logger.error(f"Ошибка во время выполнения агента: {exc}", exc_info=True)
+                raise
+        
+
+
+
 def _fallback_answer(result: dict[str, Any]) -> str:
+    """
+    "Извлекает текстовый ответ из истории сообщений агента.
+    Аргументы:
+        result (dict[str, Any]): Словарь с результатами работы агента, содержащий ключ 'messages'.
+    Возвращает:
+        str: Последнее текстовое сообщение от ИИ или стандартная фраза об отсутствии ответа."
+    """
     messages = result.get("messages", [])
     for message in reversed(messages):
         if isinstance(message, AIMessage):
@@ -119,7 +140,14 @@ def _fallback_answer(result: dict[str, Any]) -> str:
 
 
 def _contains_cyrillic(text: str) -> bool:
-    lowered = text.casefold()
+    """
+    "Проверяет наличие символов кириллицы в строке.
+    Аргументы:
+        text (str): Строка для проверки.
+    Возвращает:
+        bool: True, если найден хотя бы один кириллический символ, иначе False."
+    """
+    lowered = text.casefold()#нижний регистр
     return any("а" <= char <= "я" or char == "ё" for char in lowered)
 
 
@@ -128,6 +156,20 @@ def _fallback_compound_answer(
     matches: list[CompoundMatchCard],
     compounds: list[CompoundOverview],
 ) -> str:
+    """
+    "Формирует текстовое описание найденного вещества на основе данных из PubChem.
+    
+    Выбирает наиболее релевантное соединение и составляет ответ на языке запроса 
+    (русском или английском), включая название, CID, формулу и молекулярную массу.
+
+    Аргументы:
+        request_text (str): Текст исходного запроса пользователя.
+        matches (list[CompoundMatchCard]): Список карточек совпадений.
+        compounds (list[CompoundOverview]): Список детальных обзоров соединений.
+        
+    Возвращает:
+        str: Текстовое резюме с информацией о веществе или сообщение о неуспешном поиске."
+    """
     primary_compound = compounds[0] if compounds else None
     primary_match = matches[0] if matches else None
     is_russian = _contains_cyrillic(request_text)
@@ -136,6 +178,7 @@ def _fallback_compound_answer(
         title = primary_compound.title or f"CID {primary_compound.cid}"
         formula = primary_compound.molecular_formula or "—"
         weight = primary_compound.molecular_weight
+
         if is_russian:
             weight_block = f", молекулярная масса {weight:.4f} г/моль" if weight is not None else ""
             return (
@@ -158,53 +201,41 @@ def _fallback_compound_answer(
 
 
 def _infer_parsed_query(request_text: str, tool_trace: list[AgentToolTraceEntry]) -> ParsedAgentQuery:
+    """
+    "Восстанавливает структуру поискового запроса на основе истории вызовов инструментов агента.
+    
+    Анализирует цепочку вызовов (tool_trace), определяет использованный инструмент 
+    и извлекает параметры поиска, такие как идентификатор вещества и лимит результатов.
+
+    Аргументы:
+        request_text (str): Текст исходного запроса пользователя.
+        tool_trace (list[AgentToolTraceEntry]): История вызовов инструментов агентом.
+        
+    Возвращает:
+        ParsedAgentQuery: Объект с метаданными запроса, языком и параметрами поиска."
+    """
     language = "ru" if _contains_cyrillic(request_text) else "en"
-    parsed = ParsedAgentQuery(
-        intent="find compound from natural-language description",
-        language=language,
+
+    #генератор
+    target_event = next(
+        (e for e in tool_trace if e.tool_name in MCP_LOOKUP_MAP), 
+        None
     )
 
-    for event in tool_trace:
-        name = event.tool_name
-        args = event.arguments
-        #проверка на вхождение строки в название
+    query_obj = None
 
-        if "search_by_name_pubchem" in name or "search_by_name" in name:
-            parsed.intent = "lookup compound by name"
-            parsed.compound_name = args.get("name")
-            
-        elif "search_by_smiles_pubchem" in name or "search_by_smiles" in name:
-            parsed.intent = "lookup compound by SMILES"
-            parsed.smiles = args.get("smiles")
+    if target_event:
+        query_obj = QueryRequest(
+            input_mode = MCP_LOOKUP_MAP[target_event.tool_name],
+            identifier = target_event.arguments.get("identifier", ""),
+            limit = target_event.arguments.get("limit", 10)
+        )
 
-        elif "search_by_formula_pubchem" in name or "search_by_formula" in name:
-            parsed.intent = "lookup compound by molecular formula"
-            parsed.formula = args.get("formula")
-
-        elif "search_compound_by_inchikey" in name or "search_by_inchikey" in name:
-            parsed.intent = "lookup compound by InChIKey"
-            parsed.synonym_hint = args.get("InChIKey")
-
-     #   elif event.tool_name == "search_by_synonym":
-      #      parsed.intent = "lookup compound by synonym"
-        #     parsed.synonym_hint = args.get("synonym")
-
-     #    elif event.tool_name == "search_compound_by_mass_range":
-        #     parsed.intent = "filter compounds by mass range"
-         #    min_mass = args.get("min_mass")
-         #    max_mass = args.get("max_mass")
-         #    if isinstance(min_mass, (int, float)) and isinstance(max_mass, (int, float)):
-           #      parsed.mass_range = ParsedMassRange(
-          #           min_mass=float(min_mass),
-           #          max_mass=float(max_mass),
-           #          mass_type=args.get("mass_type", "molecular_weight"),
-         #        )
-      #   elif event.tool_name == "name_to_smiles":
-       #      parsed.intent = "resolve compound name to SMILES"
-         #     if parsed.compound_name is None:
-          #        parsed.compound_name = args.get("name")
-
- #     return parsed
+    return ParsedAgentQuery(
+        intent = "Scientific chemical lookup via MCP tools",
+        language = language,
+        query = query_obj
+    )
 
 
 def _infer_clarification(
@@ -259,59 +290,63 @@ def _infer_explanation(
     
     """Восстановление пути размышлений агента"""
 
-    if needs_clarification:
+    if needs_clarification or not parsed_query.query:
         return []
 
     is_russian = _contains_cyrillic(request_text)
+
+    mode = parsed_query.query.input_mode
+    identifier = parsed_query.query.identifier
+
     primary = compounds[0] if compounds else None
     explanation: list[str] = []
 
-    if parsed_query.compound_name:
+    if mode == "name":
 
-        if is_russian:
-            explanation.append(f"Запрос содержал явное название вещества: {parsed_query.compound_name}.")
+        msg = f"Запрос интерпретирован как поиск по названию: {identifier}." if is_russian \
+              else f"The request was interpreted as a name search: {identifier}."
+        
+        explanation.append(msg)
 
-        else:
-            explanation.append(f"The request contained an explicit compound name: {parsed_query.compound_name}.")
+    elif mode == "smiles":
+        msg = f"Использована химическая структура (SMILES): {identifier}." if is_russian \
+              else f"The chemical structure (SMILES) was used: {identifier}."
+        
+        explanation.append(msg)
 
-    if parsed_query.synonym_hint:
+    elif mode == "formula":
+        msg = f"Поиск выполнен по молекулярной формуле: {identifier}." if is_russian \
+              else f"The search was performed by molecular formula: {identifier}."
+        
+        explanation.append(msg)
 
-        if is_russian:
-            explanation.append(f"Поиск использовал синоним или альтернативное имя: {parsed_query.synonym_hint}.")
+    elif mode == "cid":
+        msg = f"Запрос выполнен по прямому идентификатору PubChem CID: {identifier}." if is_russian \
+              else f"The query was executed by direct PubChem CID: {identifier}."
+        
+        explanation.append(msg)
 
-        else:
-            explanation.append(f"The lookup used a synonym or alternate name: {parsed_query.synonym_hint}.")
+    #анализ использованных тулов
+    executed_tools = {entry.tool_name for entry in tool_trace if not entry.error_message}
+    
+    if "search_compound_by_mass_range" in executed_tools:
+        explanation.append(
+            "Выполнен поиск в диапазоне масс для уточнения параметров." if is_russian 
+            else "Performed a mass range search to refine parameters."
+        )
 
-    if parsed_query.smiles:
+    if "get_compound_summary" in executed_tools:
+        explanation.append(
+            "Получена детальная сводка характеристик для найденного соединения." if is_russian 
+            else "Fetched a detailed summary for the identified compound."
+        )
 
-        if is_russian:
-            explanation.append("Поиск опирался на точное структурное совпадение по SMILES.")
-
-        else:
-            explanation.append("The lookup relied on an exact structural match by SMILES.")
-
-    if parsed_query.formula:
-
-        if is_russian:
-            explanation.append(f"Кандидаты фильтровались по молекулярной формуле {parsed_query.formula}.")
-
-        else:
-            explanation.append(f"Candidates were filtered by molecular formula {parsed_query.formula}.")
-
-    if parsed_query.mass_range and primary and primary.molecular_weight is not None:
-
-        if is_russian:
-            explanation.append(
-                f"Молекулярная масса {primary.molecular_weight:.4f} г/моль попадает в запрошенный диапазон "
-                f"{parsed_query.mass_range.min_mass:.4f}-{parsed_query.mass_range.max_mass:.4f}."
-            )
-
-        else:
-            explanation.append(
-                f"The molecular weight {primary.molecular_weight:.4f} g/mol falls within the requested range "
-                f"{parsed_query.mass_range.min_mass:.4f}-{parsed_query.mass_range.max_mass:.4f}."
-            )
-
+    if "search_by_synonym_pubchem" in executed_tools:
+        explanation.append(
+            "Проведен дополнительный поиск по базе синонимов." if is_russian 
+            else "Conducted an additional search in the synonyms database."
+        )
+###проверка результата
     if primary is not None:
 
         title = primary.title or f"CID {primary.cid}"
@@ -332,55 +367,80 @@ def _infer_explanation(
         else:
             explanation.append(f"PubChem returned {title} (CID {matches[0].cid}) as the best available match.")
 
-    if any("get_compound_summary" in event.tool_name for event in tool_trace):
-
-        if is_russian:
-            explanation.append("Для финального ответа были дозапрошены свойства выбранного CID.")
-
-        else:
-            explanation.append("The final answer is grounded in a PubChem summary fetched for the selected CID.")
 
     deduped = list(OrderedDict((item, None) for item in explanation).keys())
     return deduped[:4]
 
 
 def _collect_compounds(tool_trace: list[AgentToolTraceEntry]) -> tuple[list[CompoundMatchCard], list[CompoundOverview]]:
-    """ """
+    """
+    Функция обходит лог действий агента (tool_trace), парсит JSON-ответы от сервера PubChem,
+    валидирует их с помощью Pydantic-моделей и формирует два списка: краткие карточки 
+    совпадений и подробные обзоры соединений. Используется OrderedDict для сохранения 
+    порядка появления и дедупликации по CID.
+
+    Args:
+        tool_trace (list[AgentToolTraceEntry]): Список записей о вызовах инструментов,
+            где каждая запись содержит сырой результат выполнения функции (JSON или dict).
+
+    Returns:
+        tuple[list[CompoundMatchCard], list[CompoundOverview]]: Кортеж, содержащий:
+            1. Список уникальных карточек совпадений (CompoundMatchCard) для UI/поиска.
+            2. Список уникальных подробных описаний соединений (CompoundOverview).
+    """
     match_map: "OrderedDict[int, CompoundMatchCard]" = OrderedDict()
     compound_map: "OrderedDict[int, CompoundOverview]" = OrderedDict()
 
     for event in tool_trace:
-        if event.result is None or not event.result.get("ok", False):
-            continue
-
-        for match in event.result.get("matches", []) or []:
+        # требуемый формат raw_result: json
+        raw_result = event.result
+        if isinstance(raw_result, str):
             try:
-                validated = CompoundMatchCard.model_validate(match)
+                result_data = json.loads(raw_result)
+
             except Exception:
                 continue
-            match_map.setdefault(validated.cid, validated)
 
-        compound = event.result.get("compound")
+        elif isinstance(raw_result, dict):
+            result_data = raw_result
+
+        else:
+            continue
+
+        if not result_data.get("ok", False):
+            continue
+
+
+        for match in result_data.get("matches", []) or []:
+            try:
+                validated = CompoundMatchCard.model_validate(match)
+                # setdefault гарантирует дедупликацию: оставляем первое найденное
+                match_map.setdefault(validated.cid, validated)
+
+            except Exception:
+                continue
+
+        compound = result_data.get("compound")
         if compound:
             try:
                 validated = CompoundOverview.model_validate(compound)
+                if validated:
+                    compound_map.setdefault(validated.cid, validated)
+                    
             except Exception:
-                validated = None
-            if validated is not None:
-                compound_map.setdefault(validated.cid, validated)
+                pass
 
-        name_to_smiles_cid = event.result.get("cid")
-        if name_to_smiles_cid and event.tool_name == "name_to_smiles":
+        cid_val = result_data.get("cid")
+        if cid_val:
             try:
-                match_map.setdefault(
-                    int(name_to_smiles_cid),
-                    CompoundMatchCard(
-                        cid=int(name_to_smiles_cid),
-                        title=event.result.get("resolved_title"),
-                        molecular_formula=event.result.get("molecular_formula"),
-                        molecular_weight=event.result.get("molecular_weight"),
-                    ),
-                )
+                cid_int = int(cid_val)
+                if cid_int not in match_map:
+                    match_map[cid_int] = CompoundMatchCard(
+                        cid=cid_int,
+                        title=result_data.get("resolved_title") or f"CID {cid_int}",
+                        molecular_formula=result_data.get("molecular_formula"),
+                        molecular_weight=result_data.get("molecular_weight")
+                    )
             except Exception:
                 continue
 
@@ -388,7 +448,19 @@ def _collect_compounds(tool_trace: list[AgentToolTraceEntry]) -> tuple[list[Comp
 
 
 def _build_warnings(normalized: AgentNormalizedPayload) -> list[WarningMessage]:
-    """ """
+    """Генерирует диагностические предупреждения о состоянии обработки запроса.
+
+    Функция анализирует флаги в нормализованных данных агента, чтобы выявить потенциальные
+    проблемы: отсутствие вызова инструментов (MCP) или необходимость диалога с пользователем.
+
+    Args:
+        normalized (AgentNormalizedPayload): Объект с извлеченными признаками ответа 
+            агента (наличие трейсов инструментов, флаги уточнения).
+
+    Returns:
+        list[WarningMessage]: Список объектов предупреждений. Пустой список = 
+            что запрос обработан в штатном режиме без замечаний.
+    """
     warnings: list[WarningMessage] = []
     if normalized.needs_clarification:
         warnings.append(
@@ -405,3 +477,48 @@ def _build_warnings(normalized: AgentNormalizedPayload) -> list[WarningMessage]:
             )
         )
     return warnings
+
+
+def build_agent_response_envelope(
+    trace_id: str,
+    request: AgentRequest,
+    runtime: PreparedAgentRuntime,
+    result: AgentFinalStructuredResponse,
+    tool_trace: list[AgentToolTraceEntry],
+) -> AgentResponseEnvelope:
+    """
+    Финальная сборка ответа. 
+    Соединяет параметры запуска, структурированный ответ модели и лог инструментов.
+    """
+
+    execution_info = AgentExecutionInfo(
+        provider=runtime.provider,
+        model=runtime.model_name,
+        text=request.text
+    )
+
+    # 2. Формируем нормализованную нагрузку
+  
+    normalized = AgentNormalizedPayload(
+        request=execution_info,
+        parsed_query=result.parsed_query,
+        final_answer=result.final_answer,
+        explanation=result.explanation,
+        needs_clarification=result.needs_clarification,
+        clarification_question=result.clarification_question,
+        referenced_cids=result.referenced_cids,
+        tool_trace=tool_trace,
+        # Поля matches и compounds можно оставить пустыми или 
+        # наполнить логикой извлечения из tool_trace в будущем
+        matches=[],
+        compounds=[]
+    )
+
+    # 3. Собираем и возвращаем Envelope
+    return AgentResponseEnvelope(
+        trace_id=trace_id,
+        status="success",
+        normalized=normalized,
+        # raw можно заполнить для отладки, если request.include_raw=True
+        raw=result.model_dump() if request.include_raw else None
+    )

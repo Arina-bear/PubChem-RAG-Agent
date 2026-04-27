@@ -15,6 +15,7 @@ This file separates the infrastructure startup logic from the implementation of 
 import json, logging
 from dataclasses import dataclass
 from typing import Any
+from contextlib import asynccontextmanager
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from langchain.agents import create_agent
@@ -27,6 +28,8 @@ from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.tracing import LangChainTracingConfig, ToolTraceRecorder, build_langchain_tracing_config
 from app.config import Settings
 from app.schemas.agent import LLMProviderName
+import logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,17 +40,7 @@ class PreparedAgentRuntime:
     provider: LLMProviderName
     model_name: str
     tracing: LangChainTracingConfig
-    async def stop(self):
-        try:
-            await self.mcp_client.disconnect()
-            if self.tracing.client:
-                self.tracing.flush()
-            logging.info("MCP runtime successfully shut down.")
-
-        except Exception as e:
-            logging.error(f"Error during MCP runtime shutdown: {e}")
-        
-
+    mcp_client: MultiServerMCPClient
 
 def _build_duplicate_tool_call_guard() -> Any:
 
@@ -94,11 +87,13 @@ def _build_duplicate_tool_call_guard() -> Any:
 
     return deduplicate_pubchem_tool_calls
 
-
+@asynccontextmanager
 async def prepare_agent_runtime(
     settings: Settings,
     trace_id: str,
-) -> PreparedAgentRuntime:
+    mcp_client: MultiServerMCPClient,
+    provider: LLMProviderName | None = None,
+): #-> PreparedAgentRuntime:
     """
     Initializes and assembles the AI ​​agent's runtime environment, configuring connections to MCP servers, language model (LLM) parameters, 
     loop protection, and tracing configuration. This is the central hub that transforms disparate components into a ready-to-run agent instance.
@@ -117,57 +112,49 @@ async def prepare_agent_runtime(
         provider/model_name: Metadata about the neural network used.
         tracing: Configuration for the monitoring system. 
     """
-    mcp_client = MultiServerMCPClient({
-        "pubchem": {
-            "command": "python",
-            "args": ["mcp_server.py"],
-            "transport": "stdio",
-        }
-    })
-    try:
-     await mcp_client.connect()
+    async with mcp_client.session("pubchem") as session:
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc(f"MCP Server failed to start: {e}")
+      mcp_tools =[]
+      resolved_model = build_chat_model(settings, provider=provider)
+      recorder = ToolTraceRecorder()
 
-    mcp_tools = await mcp_client.get_tools()
-
-    resolved_model = build_chat_model(settings)
-    recorder = ToolTraceRecorder()
-
-    middleware = [
+      middleware = [
         _build_duplicate_tool_call_guard(),
-        ToolCallLimitMiddleware(run_limit=max(1, settings.agent_max_steps)),
+        ToolCallLimitMiddleware(run_limit=max(5, settings.agent_max_steps)),
     ]
 
-    tracing = build_langchain_tracing_config(
+      tracing = build_langchain_tracing_config(
         settings,
         trace_id=trace_id,
         provider=resolved_model.provider,
     )
-    
-    agent = create_agent(
+
+      agent = create_agent(
         model=resolved_model.instance,
         tools=mcp_tools,
         system_prompt=SYSTEM_PROMPT,
         middleware=middleware,
     )
 
-    invoke_config: dict[str, Any] = {
+      invoke_config: dict[str, Any] = {
         "recursion_limit": max(8, settings.agent_max_steps * 2 + 2),
         "metadata": tracing.metadata,
+        "max_concurrency": 1,
+        "configurable": {
+        "thread_id": trace_id, # Важно для изоляции сессий
+    }
     }
     
-    if tracing.callbacks:
+      if tracing.callbacks:
         invoke_config["callbacks"] = tracing.callbacks
+        logger.info(" callbacks переданы langfuse")
 
-    return PreparedAgentRuntime(
-        agent=agent,
-        recorder=recorder,
-        invoke_config=invoke_config,
-        provider=resolved_model.provider,
-        model_name=resolved_model.model_name,
-        tracing=tracing,
+      yield PreparedAgentRuntime(
+        agent = agent,
+        recorder = recorder,
+        invoke_config = invoke_config,
+        provider = resolved_model.provider,
+        model_name = resolved_model.model_name,
+        tracing = tracing,
         mcp_client=mcp_client
     )

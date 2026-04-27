@@ -10,20 +10,24 @@ from app.agent.model_factory import resolve_provider_model_name
 from app.agent.runtime import PreparedAgentRuntime, prepare_agent_runtime
 from app.agent.tracing import record_manual_agent_trace
 from app.config import Settings
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from app.schemas.agent import AgentRequest, AgentResponseEnvelope, AgentToolTraceEntry
 from app.services.agent_service import build_agent_response_envelope
-
+import logging
+logger = logging.getLogger(__name__)
 
 class AgentStreamService:
     def __init__(
         self,
         settings: Settings,
         *,
+        mcp_client: MultiServerMCPClient,
         runtime_factory: Callable[..., PreparedAgentRuntime] = prepare_agent_runtime,
         manual_trace_recorder: Callable[..., None] = record_manual_agent_trace,
     ) -> None:
         
         self.settings = settings
+        self.mcp_client = mcp_client
         self.runtime_factory = runtime_factory
         self.manual_trace_recorder = manual_trace_recorder
 
@@ -60,24 +64,33 @@ class AgentStreamService:
                 metadata=metadata_overrides,
             )
             return response
-        
+        logger.info(f"--- [AgentService] Инициализация рантайма (trace_id: {resolved_trace_id}) ---")
         runtime = self.runtime_factory(
             self.settings,
             provider=request.provider,
             trace_id=resolved_trace_id,
         )
+        logger.debug(f"Рантайм создан для провайдера: {request.provider}")
+        logger.debug("Сборка конфигурации invoke_config...")
 
         invoke_config = dict(runtime.invoke_config)
         callbacks = list(invoke_config.get("callbacks", []))
         if extra_callbacks:
+            logger.info(f"Добавление {len(extra_callbacks)} дополнительных колбэков (например, Langfuse/Tracer)")
             callbacks.extend(extra_callbacks)
 
         if callbacks:
             invoke_config["callbacks"] = callbacks
+            logger.debug(f"Итоговое количество активных колбэков: {len(callbacks)}")
 
         metadata = dict(invoke_config.get("metadata", {}))
         if metadata_overrides:
+            logger.info(f"Применение оверрайдов метаданных: {list(metadata_overrides.keys())}")
             metadata.update(metadata_overrides)
+
+        logger.info(
+            f"--- [AgentService] Конфигурация готова. Модель: {getattr(runtime, 'model_name', 'default')} ---"
+        )
         invoke_config["metadata"] = metadata
 
         try:
@@ -92,7 +105,10 @@ class AgentStreamService:
                     30.0,
                 ),
             )
+            logger.info(f"Агент подключен")
+
         except Exception as exc:
+            print(f"Ошибка подключения агента в agent_stream_service: {exc}")
             raise normalize_agent_exception(exc) from exc
         
         finally:

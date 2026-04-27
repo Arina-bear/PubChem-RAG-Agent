@@ -155,14 +155,14 @@ def build_langchain_tracing_config(
         "url": settings.langfuse_base_url, "env": settings.environment
     })
 
-
+#клиент
     client = _build_langfuse_client(s_dict)
 
     trace_context = {"trace_id": trace_id} if _TRACE_ID_PATTERN.fullmatch(trace_id) else None
 
     handler = CallbackHandler(
         public_key=pub_key,
-        update_trace=True,
+       # update_trace=True,
         trace_context=trace_context,
     )
 
@@ -190,13 +190,11 @@ def build_langfuse_client_from_settings(settings: Settings) -> Langfuse | None:
 
     if not public_key or not secret_key:
         return None
-    
-    return _build_langfuse_client(
-        public_key=public_key,
-        secret_key=secret_key,
-        base_url=settings.langfuse_base_url,
-        environment=settings.environment,
-    )
+    s_dict = json.dumps({
+        "pub": public_key, "sec": secret_key, 
+        "url": settings.langfuse_base_url, "env": settings.environment
+    })
+    return _build_langfuse_client(s_dict)
 
 
 def record_manual_agent_trace(

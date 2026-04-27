@@ -1,5 +1,5 @@
-from app.schemas.interpret import InterpretRequest
-from app.services.interpret_service import InterpretService
+from src.app.schemas.interpret import InterpretRequest
+from src.app.services.interpret_service import InterpretService
 
 
 def test_interpret_service_detects_cid() -> None:

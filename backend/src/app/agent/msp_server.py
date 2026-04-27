@@ -12,24 +12,24 @@ from app.schemas.schemas import (SearchByNameInput,SearchBySMILESInput,SearchByF
                                  ,SearchByInChIKeyArgs)
 
 "Создание mcp-сервера"""
-
+#общий счетчик
+global_sem = asyncio.Semaphore(1)
 mcp = FastMCP("pubchem-tools")
 
+import asyncio
+import httpx
+import urllib.parse
+import json
+from typing import Any
+
 async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
-    """
-    Fetch compound properties from PubChem by CID.
-    
-    Args:
-        cid: PubChem Compound ID
-        client: HTTP client for making requests
-    
-    Returns:
-        Dictionary with cid, name, formula, and weight
-    """
+    """Безопасно запрашивает свойства вещества. При ошибке возвращает базовую инфо."""
     prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,Title/JSON"
     
     try:
-        response = await client.get(prop_url)
+        async with global_sem:
+            response = await client.get(prop_url, timeout=5.0)
+            await asyncio.sleep(0.1)
         
         if response.status_code == 200:
             data = response.json()
@@ -50,227 +50,84 @@ async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
         "molecular_weight": None
     }
 
-
-#обработка
-def _error_payload(error: AppError) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "error": {
-            "code": error.code.value,
-            "message": error.message,
-            "retriable": error.retriable,
-            "details": error.details or None,
-        },
-    }
-
-
-def _unexpected_error_payload(error: Exception) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "error": {
-            "code": ErrorCode.UPSTREAM_UNAVAILABLE.value,
-            "message": f"Непредвиденная ошибка tool execution: {error}",
-            "retriable": False,
-            "details": None,
-        },
-    }
-
-
-@mcp.tool()
-async def search_by_name_pubchem(arguments: SearchByNameInput) -> str:
-    """Search PubChem for compounds matching a chemical name."""
-    val = arguments.name
-    limit = arguments.limit
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        encoded_name = urllib.parse.quote(val)
-        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/cids/JSON"
-
-        try:
-            response = await client.get(url, timeout=10)
-            data = response.json()
-
-            if response.status_code != 200:
-                return json.dumps({
-                    "ok": False, 
-                    "message": f"Compound '{val}' not found", 
-                    "matches": []
-                }, ensure_ascii=False)
-
-            cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
-            
-            if not cid_list:
-                return json.dumps({
-                    "ok": False, 
-                    "message": f"No compounds found for '{val}'", 
-                    "matches": []
-                }, ensure_ascii=False)
-            
-            results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
-            
-            # ФИНАЛЬНЫЙ RETURN: используем ok и matches
-            return json.dumps({
-                "ok": True,
-                "query": val,
-                "matches": results,
-                "count": len(results)
-            }, ensure_ascii=False)
-
-        except Exception as e:
-
-            return json.dumps({
+async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, limit: int) -> dict:
+    """Общая логика поиска CID и сбора свойств для всех инструментов."""
+    try:
+        async with global_sem:
+            response = await client.get(url, timeout=10.0)
+            await asyncio.sleep(0.1)
+        if response.status_code != 200:
+            return {
                 "ok": False, 
-                "message": f"Failed to fetch CID: {str(e)}", 
+                "message": f"Запрос '{query_val}' не дал результатов в базе PubChem.", 
                 "matches": []
-            }, ensure_ascii=False)
+            }
 
-##tool 2
-
-@mcp.tool()
-async def search_by_smiles_pubchem(arguments: SearchBySMILESInput) -> str:
-
-    """Search PubChem for compounds matching a SMILES string."""
-
-    val = arguments.smiles
-    limit = arguments.limit
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            encoded_smiles = urllib.parse.quote(val)
-            url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{encoded_smiles}/cids/JSON"
-            response = await client.get(url, timeout=10)
-            data = response.json()
-
-            if response.status_code != 200:
-                return json.dumps({
-                    "ok": False, 
-                    "message": f"Compound with SMILES '{val}' not found", 
-                    "matches": []
-                }, ensure_ascii=False)
-
-            cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
-            
-            if not cid_list:
-                return json.dumps({
-                    "ok": False, 
-                    "message": f"No compounds found for SMILES '{val}'", 
-                    "matches": []
-                }, ensure_ascii=False)
-            
-            results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
-            
-            return json.dumps({
-                "ok": True, 
-                "query": val, 
-                "matches": results, 
-                "count": len(results)
-            }, ensure_ascii=False)
-
-        except Exception as e:
-            return json.dumps({
-                "ok": False, 
-                "message": f"Failed to fetch CID: {str(e)}", 
-                "matches": []
-            }, ensure_ascii=False)
+        data = response.json()
+        cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
         
+        if not cid_list:
+            return {"ok": False, "message": "Список идентификаторов пуст.", "matches": []}
+        
+        # Запускаем сбор свойств. return_exceptions=True гарантирует, что gather не выкинет Exception
+        tasks = [_fetch_props(cid, client) for cid in cid_list]
+        results_raw = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Очищаем результаты от возможных объектов исключений
+        matches = [res for res in results_raw if isinstance(res, dict)]
+        
+        return {
+            "ok": True if matches else False,
+            "query": query_val,
+            "matches": matches,
+            "count": len(matches)
+        }
 
-#tool 3
+    except Exception as e:
+        # Ловим только критические ошибки (например, полный разрыв соединения)
+        return {
+            "ok": False, 
+            "message": f"Сетевая ошибка при обращении к PubChem: {str(e)}", 
+            "matches": []
+        }
 
-@mcp.tool()
-async def search_by_formula_pubchem(arguments: SearchByFormulaInput) -> str:
-    """Search PubChem for compounds matching a molecular formula."""
+# --- TOOLS ---
 
-    val = arguments.formula 
-    limit = arguments.limit
+@mcp.tool(name="search_by_name_pubchem")
+async def search_by_name_pubchem(name: str, limit: int = 5) -> dict:
+    clean_name = name.replace(" ", "").strip()
+    args = SearchByNameInput(name=clean_name, limit=limit)
+    async with httpx.AsyncClient(timeout=15) as client:
+        encoded_name = urllib.parse.quote(args.name)
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/cids/JSON"
+        return await _perform_search(client, url, args.name, args.limit)
     
-    async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            encoded_formula = urllib.parse.quote(val)
-            url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{encoded_formula}/cids/JSON"
-            response = await client.get(url)
-            
-            if response.status_code != 200:
-                return json.dumps({
-                    "ok": False, 
-                    "message": f"Formula '{val}' not found", 
-                    "matches": []
-                }, ensure_ascii=False)
-            
-            data = response.json()
-            cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
-            
-            if not cid_list:
-                return json.dumps({
-                    "ok": False, 
-                    "message": f"No compounds found for formula '{val}'", 
-                    "matches": []
-                }, ensure_ascii=False)
-            
-            results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
-            
-            return json.dumps({
-                "ok": True,
-                "query": val,
-                "query_type": "formula",
-                "matches": results, 
-                "count": len(results)
-            }, ensure_ascii=False)
+@mcp.tool(name="search_by_smiles_pubchem")
+async def search_by_smiles_pubchem(smiles: str, limit: int = 5) -> dict:
+    clean_smiles = smiles.replace(" ", "").strip()
+    args = SearchBySMILESInput(smiles = clean_smiles, limit=limit)
+    async with httpx.AsyncClient(timeout=15) as client:
+        encoded_smiles = urllib.parse.quote(args.smiles)
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{encoded_smiles}/cids/JSON"
+        return await _perform_search(client, url, args.smiles, args.limit)
 
-        except Exception as e:
-            return json.dumps({
-                "ok": False, 
-                "message": f"Failed to fetch CID: {str(e)}", 
-                "matches": []
-            }, ensure_ascii=False)
+@mcp.tool(name="search_by_formula_pubchem")
+async def search_by_formula_pubchem(formula: str, limit: int = 5) -> dict:
+    clean_formula = formula.replace(" ", "").strip()
+    args = SearchByFormulaInput(formula=clean_formula, limit=limit)
+    async with httpx.AsyncClient(timeout=15) as client:
+        encoded_formula = urllib.parse.quote(args.formula)
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{encoded_formula}/cids/JSON"
+        return await _perform_search(client, url, args.formula, args.limit)
 
-#tool 4
-@mcp.tool()
-async def search_compound_by_inchikey(arguments: SearchByInChIKeyArgs) -> str:
-    """Search PubChem compounds by exact InChIKey."""
-    val = arguments.inchikey 
-    limit = arguments.limit
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        try:
-            encoded = urllib.parse.quote(val.strip())
-            url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{encoded}/cids/JSON"
-            response = await client.get(url)
-            
-            if response.status_code != 200:
-                return json.dumps({
-                    "ok": False,
-                    "message": f"InChIKey '{val}' not found",
-                    "matches": []
-                }, ensure_ascii=False)
-            
-            data = response.json()
-            cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
-            
-            if not cid_list:
-                return json.dumps({
-                    "ok": False,
-                    "message": f"No compounds found for InChIKey '{val}'",
-                    "matches": []
-                }, ensure_ascii=False)
-            
-            results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
-            
-            return json.dumps({
-                "ok": True,             
-                "query": val,
-                "query_type": "inchikey",
-                "matches": results,     
-                "count": len(results)
-            }, ensure_ascii=False)
-            
-        except Exception as e:
-            return json.dumps({
-                "ok": False,
-                "error_type": "internal_error",
-                "message": str(e),
-                "matches": []
-            }, ensure_ascii=False)
-
+@mcp.tool(name="search_by_inchikey_pubchem")
+async def search_by_inchikey_pubchem(inchikey: str, limit: int = 5) -> dict:
+    clean_inchikey = inchikey.replace(" ", "").strip()
+    args = SearchByInChIKeyArgs(inchikey=clean_inchikey, limit=limit)
+    async with httpx.AsyncClient(timeout=15) as client:
+        encoded_inchikey = urllib.parse.quote(args.inchikey)
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{encoded_inchikey}/cids/JSON"
+        return await _perform_search(client, url, args.inchikey, args.limit)
 #tool 5
 #@mcp.tool()
 #async def search_compound_by_mass_range(

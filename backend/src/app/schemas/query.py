@@ -6,7 +6,7 @@ from app.schemas.common import CompoundMatchCard, CompoundOverview, ErrorPayload
 
 
 Domain = Literal["compound"]
-InputMode = Literal["cid", "name", "smiles", "inchikey", "formula"]
+InputMode = Literal["cid", "name", "smiles", "inchikey", "formula", "Unnamed"]
 Operation = Literal[
     "property",
     "record",
@@ -23,10 +23,17 @@ Operation = Literal[
     "fastsubstructure",
 ]
 
+class QueryRequest(BaseModel):
+    """Объект запроса к сервису поиска."""
+    input_mode: InputMode
+    identifier: str
+    operation: Operation = "property"
+    limit: int = Field(default=10, ge=1, le=50)
+    include_raw: bool = False
 
 class PaginationSpec(BaseModel):
     start: int = 0
-    limit: int = Field(default=10, ge=1, le=50)
+    limit: int = Field(default = 10, ge = 1, le = 50)
 
 
 class OutputSpec(BaseModel):
@@ -34,40 +41,11 @@ class OutputSpec(BaseModel):
     include_images: bool = True
     include_synonyms: bool = True
 
-
-class ManualQuerySpec(BaseModel):
-    domain: Domain = "compound"
-    input_mode: InputMode
-    identifier: str = Field(min_length=1)
-    operation: Operation = "property"
-    properties: list[str] = Field(default_factory=list)
-    filters: dict[str, Any] = Field(default_factory=dict)
-    pagination: PaginationSpec | None = None
-    output: OutputSpec | Literal["json"] = Field(default="json")
-    include_raw: bool = True
-
-    @field_validator("identifier")
-    @classmethod
-    def strip_identifier(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("identifier must not be blank")
-        return cleaned
-
-    @field_validator("output", mode="before")
-    @classmethod
-    def normalize_output(cls, value: Any) -> OutputSpec | Literal["json"]:
-        if value == "json":
-            return "json"
-        return value
-
-
 class ResolvedQuery(BaseModel):
     domain: Domain = "compound"
     input_mode: InputMode
     identifier: str
     operation: Operation
-
 
 class QueryNormalizedPayload(BaseModel):
     query: ResolvedQuery
@@ -76,10 +54,9 @@ class QueryNormalizedPayload(BaseModel):
     synonyms: list[str] = Field(default_factory=list)
     sections: dict[str, Any] = Field(default_factory=dict)
 
-
 class QueryResponseEnvelope(BaseModel):
     trace_id: str
-    source: Literal["pubchem-pug-rest", "pubchem-pug-view", "interpreter", "mixed"] = "pubchem-pug-rest"
+    source: Literal["pubchem-pug-rest", "pubchem-pug-view", "interpreter", "mixed", "pubchem-mcp-service"] = "pubchem-pug-rest"
     status: Literal["success", "error"] = "success"
     raw: dict[str, Any] | None = None
     normalized: QueryNormalizedPayload | None = None

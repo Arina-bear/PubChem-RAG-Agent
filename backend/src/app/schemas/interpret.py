@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ErrorPayload, PresentationHints, WarningMessage
-from app.schemas.query import ManualQuerySpec
+from app.schemas.query import QueryRequest
 
 
 class InterpretRequest(BaseModel):
@@ -12,7 +12,7 @@ class InterpretationCandidate(BaseModel):
     label: str
     rationale: str
     confidence: float = Field(ge=0.0, le=1.0)
-    query: ManualQuerySpec
+    query: QueryRequest
 
 
 class InterpretationPayload(BaseModel):

@@ -20,10 +20,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.common import CompoundMatchCard, CompoundOverview, ErrorPayload, PresentationHints, WarningMessage
+from app.schemas.query import QueryRequest
 
 
 import json
-LLMProviderName = Literal["openai", "modal_glm"]
+LLMProviderName = Literal["openai", "modal_glm", "ollama"]
 
 
 class AgentRequest(BaseModel):
@@ -52,15 +53,17 @@ class ParsedAgentQuery(BaseModel):
 
     intent: str = Field(description="Short description of what the user is trying to do.")
     language: str | None = Field(default=None, description="Language the user appears to be using.")
-    compound_name: str | None = Field(default=None, description="Explicit compound name if it can be inferred safely.")
-    synonym_hint: str | None = Field(default=None, description="Synonym or alias hint if relevant.")
-    smiles: str | None = Field(default=None, description="SMILES string if the request contains one.")
-    formula: str | None = Field(default=None, description="Molecular formula if the request contains one.")
+#новый тип 
+    query: QueryRequest | None = Field(
+        default=None, 
+        description="The structured search query to be executed."
+    )
     mass_range: ParsedMassRange | None = Field(default=None, description="Mass constraint if present.")
     requested_limit: int | None = Field(default=None, ge=1, le=20, description="Number of results the user seems to want.")
 
 
 class AgentFinalStructuredResponse(BaseModel):
+    """Финальный ответ, который агент отдает пользователю."""
     model_config = ConfigDict(extra="forbid")
 
     final_answer: str = Field(description="User-facing answer grounded only in tool results.")

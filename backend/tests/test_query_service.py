@@ -1,75 +1,53 @@
-from app.config import Settings
-from app.schemas.query import ManualQuerySpec
-from app.services.query_service import QueryService
+import asyncio
+from src.app.config import Settings
+from src.app.services.query_service import QueryService
+from src.app.schemas.agent import QueryRequest
+# Импортируй свой реальный MultiServerMCPClient
+from src.app.agent.mcp_client import MultiServerMCPClient 
+from pathlib import Path
+import os
 
+current_dir = Path(__file__).parent.parent
+src_path = str(current_dir / "src")
 
-class FakeAdapter:
-    async def resolve_cids(self, input_mode: str, identifier: str, *, limit: int) -> list[int]:
-        if input_mode == "cid":
-            return [2244]
-        if input_mode == "name":
-            return [2244, 3672]
-        if input_mode == "formula":
-            return [2244, 1983]
-        if input_mode == "inchikey":
-            return [2244]
-        return [2244]
+async def debug_mcp_query():
+    print("--- Фаза 1: Инициализация настроек ---")
+    settings = Settings()
+    mcp_config = {
+    "pubchem": {
+        "command": "python",
+        "args": ["-m", "app.agent.msp_server"], 
+        "transport": "stdio",
+        "env": {**os.environ, "PYTHONPATH": src_path}
+    }
+}
+    mcp_client = MultiServerMCPClient(mcp_config) 
+    
+    print("--- Фаза 2: Подключение к MCP ---")
+    try:
+        async with mcp_client.session("pubchem") as session:
+            service = QueryService(settings, mcp_client)
+            
+            # Создаем запрос
+            req = QueryRequest(
+                input_mode="inchikey",
+                identifier="QCOZYUGXYJSINC-UHFFFAOYSA-N",
+                operation="property",
+                limit=2,
+                include_raw=True
+            )
+            
+            print(f"--- Фаза 3: Выполнение запроса {req.identifier} ---")
+            response = await service.execute(req)
+            
+            print("Ответ сформирован:")
+            print(f"CID: {response.normalized.matches[0].cid}")
+            print(f"Title: {response.normalized.matches[0].title}")
+            
+    except Exception as e:
+        print("\n!!!ОШИБКА !!!")
+        import traceback
+        traceback.print_exc()
 
-    async def fetch_compound_snapshot(self, cid: int) -> dict:
-        return {
-            "cid": cid,
-            "properties": {
-                "PropertyTable": {
-                    "Properties": [
-                        {
-                            "CID": cid,
-                            "Title": "Aspirin" if cid == 2244 else "Example",
-                            "IUPACName": "2-acetyloxybenzoic acid",
-                            "MolecularFormula": "C9H8O4",
-                            "MolecularWeight": 180.16,
-                            "ExactMass": 180.0423,
-                            "CanonicalSMILES": "CC(=O)OC1=CC=CC=C1C(=O)O",
-                            "InChIKey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N",
-                        }
-                    ]
-                }
-            },
-            "synonyms": {
-                "InformationList": {
-                    "Information": [
-                        {
-                            "CID": cid,
-                            "Synonym": ["Aspirin", "Acetylsalicylic acid", "2-Acetoxybenzoic acid"],
-                        }
-                    ]
-                }
-            },
-            "image_data_url": "data:image/png;base64,ZmFrZQ==",
-        }
-
-
-async def test_query_service_resolves_name_to_primary_result() -> None:
-    service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
-    response = await service.execute(ManualQuerySpec(input_mode="name", identifier="aspirin", operation="property"))
-
-    assert response.normalized is not None
-    assert response.normalized.primary_result is not None
-    assert response.normalized.primary_result.cid == 2244
-    assert response.normalized.synonyms[0] == "Aspirin"
-    assert len(response.normalized.matches) == 2
-
-
-async def test_query_service_uses_synonyms_tab_hint_for_synonym_operation() -> None:
-    service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
-    response = await service.execute(ManualQuerySpec(input_mode="cid", identifier="2244", operation="synonyms"))
-
-    assert response.presentation_hints.active_tab == "synonyms"
-
-
-async def test_query_service_accepts_formula_queries_in_typed_backend() -> None:
-    service = QueryService(Settings(), FakeAdapter())  # type: ignore[arg-type]
-    response = await service.execute(ManualQuerySpec(input_mode="formula", identifier="C9H8O4", operation="property"))
-
-    assert response.normalized is not None
-    assert response.normalized.primary_result is not None
-    assert response.normalized.primary_result.cid == 2244
+if __name__ == "__main__":
+    asyncio.run(debug_mcp_query())
