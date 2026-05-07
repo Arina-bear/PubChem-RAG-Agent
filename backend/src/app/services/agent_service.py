@@ -112,7 +112,12 @@ class AgentService:
 
             except asyncio.TimeoutError:
                 logger.error("Агент превысил лимит времени (Timeout)")
-                raise AppError(ErrorCode.TIMEOUT, "Агент слишком долго думал")
+                raise AppError(
+                    ErrorCode.UPSTREAM_TIMEOUT,
+                    "Агент слишком долго думал — попробуйте более конкретный запрос или повторите.",
+                    http_status=504,
+                    retriable=True,
+                )
          
             except Exception as exc:
                 logger.error(f"Ошибка во время выполнения агента: {exc}", exc_info=True)
