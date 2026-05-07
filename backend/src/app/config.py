@@ -29,14 +29,16 @@ class Settings(BaseSettings):
     heavy_query_concurrency: int = 1
     agent_max_steps: int = 6
 
-    llm_default_provider: str = "modal_glm"
+    llm_default_provider: str = "gemini"
     openai_base_url: str = "https://api.openai.com/v1"
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4.1-mini"
     modal_glm_base_url: str = "https://api.us-west-2.modal.direct/v1"
-    modal_glm_api_key: SecretStr | None = SecretStr("modalresearch_c0mHwADIlfng06-o2mrNn9K3PtLidMX3gVpAYNUmSRA")
+    modal_glm_api_key: SecretStr | None = None
     modal_glm_model: str = "zai-org/GLM-5.1-FP8"
     modal_glm_disable_thinking: bool = True
+    google_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-3-flash-preview"
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None

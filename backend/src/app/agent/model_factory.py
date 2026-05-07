@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
 #from langchain_community.chat_models import ChatOllama
 from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import Settings
 from app.errors.models import AppError, ErrorCode
 from app.schemas.agent import LLMProviderName
@@ -32,7 +33,7 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
     """
     resolved_provider = provider or settings.llm_default_provider
 
-    if resolved_provider not in {"openai", "modal_glm", "ollama"}:
+    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini"}:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             f"Неизвестный LLM provider: '{resolved_provider}'.",
@@ -40,10 +41,13 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
         )
     if resolved_provider == "openai":
         return "openai", settings.openai_model
-    
+
     if resolved_provider == "ollama":
         return "ollama", settings.ollama_base_url
-    
+
+    if resolved_provider == "gemini":
+        return "gemini", settings.gemini_model
+
     return "modal_glm", settings.modal_glm_model
 
 
@@ -98,13 +102,33 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             model="gemma3:4b",  # например, "gemma3:4b"
             base_url=ollama_url,
             temperature=0,
-            num_predict=1000, 
+            num_predict=1000,
         )
-        
+
         return ResolvedChatModel(
             provider="ollama",
             model_name="gemma3:4b",
             instance=instance.with_config(RunnableConfig(max_concurrency=1))
+        )
+
+    if resolved_provider == "gemini":
+        if settings.google_api_key is None:
+            raise AppError(
+                ErrorCode.LLM_NOT_CONFIGURED,
+                "GOOGLE_API_KEY не настроен.",
+                http_status=500,
+            )
+        instance = ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=settings.google_api_key.get_secret_value(),
+            temperature=0,
+            timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.max_retries,
+        )
+        return ResolvedChatModel(
+            provider="gemini",
+            model_name=model_name,
+            instance=instance.with_config(RunnableConfig(max_concurrency=1)),
         )
 
     if resolved_provider == "modal_glm":
