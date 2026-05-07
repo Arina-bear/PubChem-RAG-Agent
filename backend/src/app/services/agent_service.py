@@ -73,9 +73,9 @@ class AgentService:
         
         async with self.runtime_factory(
             settings=self.settings,
-            trace_id=trace_id,
-            mcp_client=self.mcp_client, 
-            provider=request.provider
+            trace_id=resolved_trace_id,
+            mcp_client=self.mcp_client,
+            provider=request.provider,
         ) as runtime:
             logger.info(f"--- [AgentService] Runtime создан: provider {request.provider}, настройки: {self.settings}")
 

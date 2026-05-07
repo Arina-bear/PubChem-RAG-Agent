@@ -21,6 +21,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain.agents import create_agent
 from langchain.agents.middleware import ToolCallLimitMiddleware, wrap_tool_call
 from langchain_core.messages import ToolMessage
+from langchain_mcp_adapters.tools import load_mcp_tools
 
 
 from app.agent.model_factory import build_chat_model
@@ -114,7 +115,7 @@ async def prepare_agent_runtime(
     """
     async with mcp_client.session("pubchem") as session:
 
-      mcp_tools =[]
+      mcp_tools = await load_mcp_tools(session)
       resolved_model = build_chat_model(settings, provider=provider)
       recorder = ToolTraceRecorder()
 
