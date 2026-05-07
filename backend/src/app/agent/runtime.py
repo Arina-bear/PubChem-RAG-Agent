@@ -63,17 +63,30 @@ def _build_tool_trace_recorder_middleware(recorder: ToolTraceRecorder) -> Any:
         result: dict[str, Any] | None = None
         error_message: str | None = None
         content = getattr(response, "content", None)
-        if isinstance(content, str):
+
+        def _parse_text_payload(text: str) -> dict[str, Any]:
             try:
-                parsed = json.loads(content)
-                result = parsed if isinstance(parsed, dict) else {"value": parsed}
+                parsed = json.loads(text)
             except ValueError:
-                result = {"text": content}
+                return {"text": text}
+            return parsed if isinstance(parsed, dict) else {"value": parsed}
+
+        if isinstance(content, str):
+            result = _parse_text_payload(content)
         elif isinstance(content, dict):
             result = content
         elif isinstance(content, list):
-            text_parts = [c for c in content if isinstance(c, str)]
-            result = {"text": "".join(text_parts), "blocks": content}
+            text_chunks: list[str] = []
+            for chunk in content:
+                if isinstance(chunk, str):
+                    text_chunks.append(chunk)
+                elif isinstance(chunk, dict) and chunk.get("type") == "text":
+                    text_value = chunk.get("text", "")
+                    if isinstance(text_value, str):
+                        text_chunks.append(text_value)
+            joined = "".join(text_chunks)
+            if joined:
+                result = _parse_text_payload(joined)
 
         if isinstance(result, dict):
             if getattr(response, "status", None) == "error" or result.get("ok") is False:

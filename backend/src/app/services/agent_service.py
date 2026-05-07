@@ -483,42 +483,76 @@ def build_agent_response_envelope(
     trace_id: str,
     request: AgentRequest,
     runtime: PreparedAgentRuntime,
-    result: AgentFinalStructuredResponse,
+    result: dict[str, Any],
     tool_trace: list[AgentToolTraceEntry],
 ) -> AgentResponseEnvelope:
-    """
-    Финальная сборка ответа. 
-    Соединяет параметры запуска, структурированный ответ модели и лог инструментов.
+    """Final response assembly.
+
+    `create_agent(...).ainvoke(...)` returns a LangGraph state dict (messages,
+    structured_response, etc.) — NOT a Pydantic model. We reconstruct the
+    envelope using the helper functions defined above:
+    - final_answer from the last AIMessage; fallback to compound summary
+      when the LLM produced an empty / generic response.
+    - matches/compounds extracted from tool_trace JSON payloads.
+    - parsed_query / explanation / clarification reconstructed from the
+      tool_trace + the original user text.
     """
 
     execution_info = AgentExecutionInfo(
         provider=runtime.provider,
         model=runtime.model_name,
-        text=request.text
+        text=request.text,
     )
 
-    # 2. Формируем нормализованную нагрузку
-  
+    matches, compounds = _collect_compounds(tool_trace)
+
+    final_answer = _fallback_answer(result)
+    if not final_answer or final_answer.startswith("Агент завершил работу"):
+        if matches or compounds:
+            final_answer = _fallback_compound_answer(request.text, matches, compounds)
+
+    parsed_query = _infer_parsed_query(request.text, tool_trace)
+    needs_clarification, clarification_question = _infer_clarification(
+        final_answer, matches, compounds
+    )
+    explanation = _infer_explanation(
+        request.text,
+        parsed_query=parsed_query,
+        matches=matches,
+        compounds=compounds,
+        tool_trace=tool_trace,
+        needs_clarification=needs_clarification,
+    )
+    referenced_cids = _collect_referenced_cids(matches, compounds)
+
     normalized = AgentNormalizedPayload(
         request=execution_info,
-        parsed_query=result.parsed_query,
-        final_answer=result.final_answer,
-        explanation=result.explanation,
-        needs_clarification=result.needs_clarification,
-        clarification_question=result.clarification_question,
-        referenced_cids=result.referenced_cids,
+        parsed_query=parsed_query,
+        final_answer=final_answer,
+        explanation=explanation,
+        needs_clarification=needs_clarification,
+        clarification_question=clarification_question,
+        matches=matches,
+        compounds=compounds,
         tool_trace=tool_trace,
-        # Поля matches и compounds можно оставить пустыми или 
-        # наполнить логикой извлечения из tool_trace в будущем
-        matches=[],
-        compounds=[]
+        referenced_cids=referenced_cids,
     )
 
-    # 3. Собираем и возвращаем Envelope
+    warnings = _build_warnings(normalized)
+
+    raw_payload: dict[str, Any] | None = None
+    if request.include_raw and isinstance(result, dict):
+        messages = result.get("messages", [])
+        raw_payload = {
+            "message_count": len(messages),
+            "tool_call_count": len(tool_trace),
+            "structured_response": result.get("structured_response"),
+        }
+
     return AgentResponseEnvelope(
         trace_id=trace_id,
         status="success",
         normalized=normalized,
-        # raw можно заполнить для отладки, если request.include_raw=True
-        raw=result.model_dump() if request.include_raw else None
+        raw=raw_payload,
+        warnings=warnings,
     )
