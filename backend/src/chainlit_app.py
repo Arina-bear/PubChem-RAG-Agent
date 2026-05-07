@@ -210,10 +210,11 @@ async def on_message(message: cl.Message) -> None:
         step.output = json.dumps(parsed_query_payload, ensure_ascii=False, indent=2)
 
     primary = select_primary_compound(response)
-    message_elements: list[cl.Element] = []
+    inline_elements: list[cl.Element] = []
+    sidebar_elements: list[cl.Element] = []
     if primary is not None:
         synonyms = extract_primary_synonyms(response, primary.cid)
-        message_elements.append(
+        inline_elements.append(
             cl.CustomElement(
                 name="CompoundCard",
                 props=build_compound_card_props(
@@ -224,18 +225,18 @@ async def on_message(message: cl.Message) -> None:
                 display="inline",
             )
         )
-        message_elements.append(
+        sidebar_elements.append(
             cl.Image(
                 name=f"CID {primary.cid} structure",
                 url=build_structure_image_url(primary.cid),
-                display="side",
+                display="inline",
             )
         )
-        message_elements.append(
+        sidebar_elements.append(
             cl.Text(
-                name="Подробности вещества",
+                name="properties",
                 content=_build_details_markdown(response),
-                display="side",
+                display="inline",
             )
         )
 
@@ -244,11 +245,11 @@ async def on_message(message: cl.Message) -> None:
             step.output = build_tool_trace_markdown(response)
 
     if len(normalized.matches) > 1:
-        message_elements.append(
+        sidebar_elements.append(
             cl.Text(
-                name="Другие кандидаты",
-                content=build_candidates_markdown(normalized.matches[1:]),
-                display="side",
+                name="candidates",
+                content="### Другие кандидаты\n" + build_candidates_markdown(normalized.matches[1:]),
+                display="inline",
             )
         )
 
@@ -269,6 +270,12 @@ async def on_message(message: cl.Message) -> None:
 
     await cl.Message(
         content=f"{normalized.final_answer}{explanation_block}{clarification_block}",
-        elements=message_elements,
+        elements=inline_elements,
         author="PubChem Agent",
     ).send()
+
+    # Push extras to the explicit element sidebar (officially supported in 2.11)
+    # instead of legacy `display="side"` on individual elements (issue #1827).
+    if sidebar_elements:
+        await cl.ElementSidebar.set_title(f"Подробности — {primary.title or 'вещество'}" if primary else "Подробности")
+        await cl.ElementSidebar.set_elements(sidebar_elements)
