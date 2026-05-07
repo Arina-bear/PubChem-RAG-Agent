@@ -36,6 +36,23 @@ def _get_session_id() -> str:
     return cast(str, session_id)
 
 
+def _humanize_runtime_error(exc: BaseException) -> str:
+    """Map noisy upstream / framework exceptions into a single short Russian
+    sentence the chat user can act on, instead of the generic
+    'Не удалось завершить запрос из-за внутренней ошибки приложения.'
+    """
+    text = repr(exc)
+    if "RESOURCE_EXHAUSTED" in text or "429" in text:
+        return "Лимит запросов к LLM временно исчерпан — подождите минуту и повторите."
+    if "GraphRecursionError" in text or "Recursion limit" in text:
+        return "Агент сделал слишком много шагов. Сформулируйте запрос более конкретно или повторите."
+    if "ServerError" in text or "500 INTERNAL" in text or "503" in text or "INTERNAL" in text:
+        return "Языковая модель временно недоступна (5xx у провайдера). Попробуйте ещё раз через несколько секунд."
+    if "TimeoutError" in text or "Timeout" in text:
+        return "Запрос занял слишком много времени. Сократите формулировку или попробуйте позже."
+    return "Не удалось завершить запрос — попробуйте ещё раз. Если проблема повторится, проверьте логи бэкенда."
+
+
 def _build_details_markdown(response: AgentResponseEnvelope) -> str:
     normalized = response.normalized
     if normalized is None:
@@ -177,11 +194,9 @@ async def on_message(message: cl.Message) -> None:
     except AppError as error:
         await cl.Message(content=error.message, author="PubChem Agent").send()
         return
-    except Exception:
-        await cl.Message(
-            content="Не удалось завершить запрос из-за внутренней ошибки приложения.",
-            author="PubChem Agent",
-        ).send()
+    except Exception as exc:
+        message = _humanize_runtime_error(exc)
+        await cl.Message(content=message, author="PubChem Agent").send()
         return
 
     normalized = response.normalized
