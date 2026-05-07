@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     candidate_limit: int = 10
     query_rate_limit_per_second: int = 3
     heavy_query_concurrency: int = 1
-    agent_max_steps: int = 6
+    agent_max_steps: int = 10
 
     llm_default_provider: str = "gemini"
     openai_base_url: str = "https://api.openai.com/v1"
