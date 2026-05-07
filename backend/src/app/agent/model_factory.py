@@ -6,7 +6,11 @@ from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
-from app.agent.rate_limiters import get_gemini_rate_limiter
+from app.agent.rate_limiters import (
+    get_gemini_rate_limiter,
+    get_nvidia_rate_limiter,
+    get_openrouter_rate_limiter,
+)
 from app.config import Settings
 from app.errors.models import AppError, ErrorCode
 from app.schemas.agent import LLMProviderName
@@ -32,6 +36,7 @@ def _build_openrouter_chat_model(settings: Settings) -> ChatOpenAI | None:
         base_url=settings.openrouter_base_url,
         timeout=settings.llm_request_timeout_seconds,
         max_retries=settings.llm_fallback_max_retries,
+        rate_limiter=get_openrouter_rate_limiter(settings),
         temperature=0,
         use_responses_api=False,
         default_headers={
@@ -68,6 +73,7 @@ def _build_nvidia_chat_model(settings: Settings) -> ChatOpenAI | None:
         base_url=settings.nvidia_base_url,
         timeout=settings.llm_request_timeout_seconds,
         max_retries=settings.llm_fallback_max_retries,
+        rate_limiter=get_nvidia_rate_limiter(settings),
         temperature=0,
         use_responses_api=False,
         extra_body=extra_body,
@@ -277,6 +283,7 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                     temperature=0,
                     timeout=settings.llm_request_timeout_seconds,
                     max_retries=settings.llm_fallback_max_retries,
+                    rate_limiter=get_gemini_rate_limiter(settings),
                 )
                 fallback_chain.append(gemini_fallback)
             if fallback_chain:

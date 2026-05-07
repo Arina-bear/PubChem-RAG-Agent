@@ -43,9 +43,19 @@ class Settings(BaseSettings):
     modal_glm_disable_thinking: bool = True
     google_api_key: SecretStr | None = None
     gemini_model: str = "gemini-3-flash-preview"
-    # Free tier для gemini-3-flash-preview = 5 RPM, для gemma-4-31b-it / gemini-3.1-flash-lite-preview ≈ 15 RPM.
-    # 13 даёт безопасный запас под 15-RPM лимит, при -3-flash-preview лучше переопределить в .env на 4.
+    # Free tier: gemini-3-flash-preview = 5 RPM, gemma-4-31b-it /
+    # gemini-3.1-flash-lite-preview ≈ 15 RPM. 13 даёт безопасный запас
+    # под 15-RPM cap; для -3-flash-preview лучше переопределить в .env на 4.
     llm_rate_limit_gemini_rpm: int = 13
+
+    # Per-provider RPM лимиты (process-wide token bucket в InMemoryRateLimiter):
+    # OpenRouter free pool — 20 RPM на модель ([docs](https://openrouter.ai/docs/api/reference/limits));
+    # 18 даёт headroom под clock skew с серверной стороной.
+    llm_rate_limit_openrouter_rpm: int = 18
+    # NVIDIA NIM (build.nvidia.com) — 40 RPM на endpoint модели
+    # ([forums.developer.nvidia.com](https://forums.developer.nvidia.com/t/request-to-increase-nim-api-rate-limit-from-40-rpm-to-200-rpm-for-personal-study/368108));
+    # 35 — то же самое с запасом.
+    llm_rate_limit_nvidia_rpm: int = 35
 
     # OpenRouter — первый fallback OpenAI-совместимого типа.
     # https://openrouter.ai/docs

@@ -28,21 +28,46 @@ from app.config import Settings
 
 
 _gemini_limiter: InMemoryRateLimiter | None = None
+_openrouter_limiter: InMemoryRateLimiter | None = None
+_nvidia_limiter: InMemoryRateLimiter | None = None
+
+
+def _build(rpm: int) -> InMemoryRateLimiter:
+    """Process-wide token bucket sized to ``rpm`` requests per minute."""
+    return InMemoryRateLimiter(
+        requests_per_second=rpm / 60.0,
+        check_every_n_seconds=0.1,
+        max_bucket_size=float(rpm),
+    )
 
 
 def get_gemini_rate_limiter(settings: Settings) -> InMemoryRateLimiter:
-    """Return the singleton rate limiter shared by all Gemini/Gemma calls.
-
-    Lazily built from ``settings.llm_rate_limit_gemini_rpm``; subsequent
-    calls reuse the same instance so the token bucket is global to the
-    process.
-    """
+    """Singleton bucket for all Gemini/Gemma calls (`llm_rate_limit_gemini_rpm`)."""
     global _gemini_limiter
     if _gemini_limiter is None:
-        rpm = settings.llm_rate_limit_gemini_rpm
-        _gemini_limiter = InMemoryRateLimiter(
-            requests_per_second=rpm / 60.0,
-            check_every_n_seconds=0.1,
-            max_bucket_size=float(rpm),
-        )
+        _gemini_limiter = _build(settings.llm_rate_limit_gemini_rpm)
     return _gemini_limiter
+
+
+def get_openrouter_rate_limiter(settings: Settings) -> InMemoryRateLimiter:
+    """Singleton bucket for OpenRouter calls (`llm_rate_limit_openrouter_rpm`).
+
+    OpenRouter free pool docs cap each model at ~20 RPM; this bucket
+    parks excess requests instead of letting them surface as 429.
+    """
+    global _openrouter_limiter
+    if _openrouter_limiter is None:
+        _openrouter_limiter = _build(settings.llm_rate_limit_openrouter_rpm)
+    return _openrouter_limiter
+
+
+def get_nvidia_rate_limiter(settings: Settings) -> InMemoryRateLimiter:
+    """Singleton bucket for NVIDIA NIM calls (`llm_rate_limit_nvidia_rpm`).
+
+    NVIDIA NIM free tier caps each model at 40 RPM; we run at 35 to
+    leave headroom for clock skew.
+    """
+    global _nvidia_limiter
+    if _nvidia_limiter is None:
+        _nvidia_limiter = _build(settings.llm_rate_limit_nvidia_rpm)
+    return _nvidia_limiter
