@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # 13 даёт безопасный запас под 15-RPM лимит, при -3-flash-preview лучше переопределить в .env на 4.
     llm_rate_limit_gemini_rpm: int = 13
 
+    # OpenRouter — fallback OpenAI-совместимый шлюз (используется когда Google
+    # недоступен из-за региона/VPN). https://openrouter.ai/docs
+    openrouter_api_key: SecretStr | None = None
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "google/gemma-4-31b-it:free"
+
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
     langfuse_base_url: str = "http://localhost:3000"

@@ -24,7 +24,7 @@ from app.schemas.query import QueryRequest
 
 
 import json
-LLMProviderName = Literal["openai", "modal_glm", "ollama", "gemini"]
+LLMProviderName = Literal["openai", "modal_glm", "ollama", "gemini", "openrouter"]
 
 
 class AgentRequest(BaseModel):

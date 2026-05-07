@@ -34,7 +34,7 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
     """
     resolved_provider = provider or settings.llm_default_provider
 
-    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini"}:
+    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini", "openrouter"}:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             f"Неизвестный LLM provider: '{resolved_provider}'.",
@@ -48,6 +48,9 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
 
     if resolved_provider == "gemini":
         return "gemini", settings.gemini_model
+
+    if resolved_provider == "openrouter":
+        return "openrouter", settings.openrouter_model
 
     return "modal_glm", settings.modal_glm_model
 
@@ -129,6 +132,32 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
         )
         return ResolvedChatModel(
             provider="gemini",
+            model_name=model_name,
+            instance=instance.with_config(RunnableConfig(max_concurrency=1)),
+        )
+
+    if resolved_provider == "openrouter":
+        if settings.openrouter_api_key is None:
+            raise AppError(
+                ErrorCode.LLM_NOT_CONFIGURED,
+                "OPENROUTER_API_KEY не настроен.",
+                http_status=500,
+            )
+        instance = ChatOpenAI(
+            model=model_name,
+            api_key=settings.openrouter_api_key.get_secret_value(),
+            base_url=settings.openrouter_base_url,
+            timeout=settings.llm_request_timeout_seconds,
+            max_retries=settings.max_retries,
+            temperature=0,
+            use_responses_api=False,
+            default_headers={
+                "HTTP-Referer": "https://github.com/Arina-bear/PubChem-RAG-Agent",
+                "X-Title": "PubChem RAG Agent",
+            },
+        )
+        return ResolvedChatModel(
+            provider="openrouter",
             model_name=model_name,
             instance=instance.with_config(RunnableConfig(max_concurrency=1)),
         )
