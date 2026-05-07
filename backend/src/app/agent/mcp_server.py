@@ -95,8 +95,10 @@ async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, l
 
 @mcp.tool(name="search_compound_by_name")
 async def search_compound_by_name(name: str, limit: int = 5) -> dict:
-    clean_name = name.replace(" ", "").strip()
-    args = SearchByNameInput(name=clean_name, limit=limit)
+    # Сохраняем пробелы внутри multi-word имён ("acetic acid" → URL-encode "acetic%20acid").
+    # PubChem REST по name индексу возвращает корректные CIDs только если
+    # пробелы не вырезаны — иначе "aceticacid" → 404.
+    args = SearchByNameInput(name=name.strip(), limit=limit)
     async with httpx.AsyncClient(timeout=15) as client:
         encoded_name = urllib.parse.quote(args.name)
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/cids/JSON"

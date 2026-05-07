@@ -217,17 +217,25 @@ def _infer_parsed_query(request_text: str, tool_trace: list[AgentToolTraceEntry]
 
     #генератор
     target_event = next(
-        (e for e in tool_trace if e.tool_name in MCP_LOOKUP_MAP), 
-        None
+        (e for e in tool_trace if e.tool_name in MCP_LOOKUP_MAP),
+        None,
     )
 
     query_obj = None
 
     if target_event:
+        input_mode = MCP_LOOKUP_MAP[target_event.tool_name]
+        # MCP-tools принимают аргумент с именем, совпадающим с input_mode
+        # ("name", "smiles", "formula", "inchikey"), а не "identifier".
+        identifier = (
+            target_event.arguments.get(input_mode)
+            or target_event.arguments.get("identifier")
+            or ""
+        )
         query_obj = QueryRequest(
-            input_mode = MCP_LOOKUP_MAP[target_event.tool_name],
-            identifier = target_event.arguments.get("identifier", ""),
-            limit = target_event.arguments.get("limit", 10)
+            input_mode=input_mode,
+            identifier=identifier,
+            limit=target_event.arguments.get("limit", 10),
         )
 
     return ParsedAgentQuery(

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 30.0
     llm_request_timeout_seconds: float = 120.0
     agent_run_timeout_seconds: float = 240.0
-    max_retries: int = 2
+    max_retries: int = 4
     candidate_limit: int = 10
     query_rate_limit_per_second: int = 3
     heavy_query_concurrency: int = 1
