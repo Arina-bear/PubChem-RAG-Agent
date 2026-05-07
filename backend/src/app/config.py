@@ -24,12 +24,16 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = 120.0
     agent_run_timeout_seconds: float = 240.0
     max_retries: int = 4
+    # Сокращённый retry для fallback моделей: если primary уже потратил
+    # 4 попытки, не имеет смысла каждому fallback провайдеру тратить ещё 4 —
+    # перейти к следующему провайдеру быстрее, чем долбить тот же.
+    llm_fallback_max_retries: int = 1
     candidate_limit: int = 10
     query_rate_limit_per_second: int = 3
     heavy_query_concurrency: int = 1
     agent_max_steps: int = 10
 
-    llm_default_provider: str = "gemini"
+    llm_default_provider: str = "nvidia"
     openai_base_url: str = "https://api.openai.com/v1"
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4.1-mini"
@@ -54,7 +58,7 @@ class Settings(BaseSettings):
     # Получить ключ: https://build.nvidia.com (Build with NVIDIA, бесплатно)
     nvidia_api_key: SecretStr | None = None
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nvidia_model: str = "meta/llama-3.3-70b-instruct"
+    nvidia_model: str = "z-ai/glm4.7"
 
     # Авто-failover Gemini → OpenRouter → NVIDIA. Включён по умолчанию: если
     # основной Google-вызов падает (FAILED_PRECONDITION, RESOURCE_EXHAUSTED,

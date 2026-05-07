@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 def _build_openrouter_chat_model(settings: Settings) -> ChatOpenAI | None:
     """Raw OpenRouter ChatOpenAI client (no `with_config` — see docstring of
-    _build_nvidia_chat_model for the reason)."""
+    _build_nvidia_chat_model for the reason).
+
+    Uses `llm_fallback_max_retries` instead of `max_retries`: when this model
+    is hit it's already because the primary failed N times, so retrying the
+    next provider another N times wastes user time. 1 try is enough to
+    decide whether to advance to the next fallback.
+    """
     if settings.openrouter_api_key is None:
         return None
     return ChatOpenAI(
@@ -25,7 +31,7 @@ def _build_openrouter_chat_model(settings: Settings) -> ChatOpenAI | None:
         api_key=settings.openrouter_api_key.get_secret_value(),
         base_url=settings.openrouter_base_url,
         timeout=settings.llm_request_timeout_seconds,
-        max_retries=settings.max_retries,
+        max_retries=settings.llm_fallback_max_retries,
         temperature=0,
         use_responses_api=False,
         default_headers={
@@ -43,17 +49,28 @@ def _build_nvidia_chat_model(settings: Settings) -> ChatOpenAI | None:
     to the OUTSIDE of the fallback chain. Reversing the order makes
     LangChain see a `RunnableBinding` at the top, which silently skips
     the fallback path on errors.
+
+    Uses `llm_fallback_max_retries` (same reason as
+    `_build_openrouter_chat_model`).
     """
     if settings.nvidia_api_key is None:
         return None
+    extra_body: dict[str, object] | None = None
+    # GLM models on NVIDIA NIM expose a "thinking" mode via chat_template_kwargs.
+    # Enabling it makes the model emit reasoning_content blocks alongside the
+    # normal content; LangChain agents handle that fine and the extra detail
+    # helps with multi-step PubChem lookups.
+    if "glm" in settings.nvidia_model.lower():
+        extra_body = {"chat_template_kwargs": {"enable_thinking": True, "clear_thinking": False}}
     return ChatOpenAI(
         model=settings.nvidia_model,
         api_key=settings.nvidia_api_key.get_secret_value(),
         base_url=settings.nvidia_base_url,
         timeout=settings.llm_request_timeout_seconds,
-        max_retries=settings.max_retries,
+        max_retries=settings.llm_fallback_max_retries,
         temperature=0,
         use_responses_api=False,
+        extra_body=extra_body,
     )
 
 @dataclass
@@ -243,10 +260,39 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                 "NVIDIA_API_KEY не настроен.",
                 http_status=500,
             )
+        # Symmetric failover: when NVIDIA is primary, retry through
+        # OpenRouter and Gemini in that order. Mirrors the Gemini-primary
+        # chain so any default provider gets the same resilience.
+        composed: object = raw
+        if settings.llm_enable_fallback:
+            fallback_chain: list[object] = []
+            openrouter_fallback = _build_openrouter_chat_model(settings)
+            if openrouter_fallback is not None:
+                fallback_chain.append(openrouter_fallback)
+            if settings.google_api_key is not None:
+                # Build a raw Gemini fallback (no rate-limiter / config wrap)
+                gemini_fallback = ChatGoogleGenerativeAI(
+                    model=settings.gemini_model,
+                    google_api_key=settings.google_api_key.get_secret_value(),
+                    temperature=0,
+                    timeout=settings.llm_request_timeout_seconds,
+                    max_retries=settings.llm_fallback_max_retries,
+                )
+                fallback_chain.append(gemini_fallback)
+            if fallback_chain:
+                composed = raw.with_fallbacks(fallback_chain)
+                fallback_models = []
+                if openrouter_fallback is not None:
+                    fallback_models.append(f"openrouter:{settings.openrouter_model}")
+                if settings.google_api_key is not None:
+                    fallback_models.append(f"gemini:{settings.gemini_model}")
+                msg = f"!!! FAILOVER: NVIDIA chat model wired with fallbacks → {', '.join(fallback_models)}"
+                print(msg)
+                logger.info(msg)
         return ResolvedChatModel(
             provider="nvidia",
             model_name=model_name,
-            instance=raw.with_config(RunnableConfig(max_concurrency=1)),
+            instance=composed.with_config(RunnableConfig(max_concurrency=1)),
         )
 
     if resolved_provider == "modal_glm":
