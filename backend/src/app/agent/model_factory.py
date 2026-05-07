@@ -1,14 +1,60 @@
 from dataclasses import dataclass
+import logging
 
 from langchain_openai import ChatOpenAI
 #from langchain_community.chat_models import ChatOllama
 from langchain_ollama import ChatOllama
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from app.agent.rate_limiters import get_gemini_rate_limiter
 from app.config import Settings
 from app.errors.models import AppError, ErrorCode
 from app.schemas.agent import LLMProviderName
 from langchain_core.runnables import RunnableConfig
+
+logger = logging.getLogger(__name__)
+
+
+def _build_openrouter_chat_model(settings: Settings) -> ChatOpenAI | None:
+    """Raw OpenRouter ChatOpenAI client (no `with_config` — see docstring of
+    _build_nvidia_chat_model for the reason)."""
+    if settings.openrouter_api_key is None:
+        return None
+    return ChatOpenAI(
+        model=settings.openrouter_model,
+        api_key=settings.openrouter_api_key.get_secret_value(),
+        base_url=settings.openrouter_base_url,
+        timeout=settings.llm_request_timeout_seconds,
+        max_retries=settings.max_retries,
+        temperature=0,
+        use_responses_api=False,
+        default_headers={
+            "HTTP-Referer": "https://github.com/Arina-bear/PubChem-RAG-Agent",
+            "X-Title": "PubChem RAG Agent",
+        },
+    )
+
+
+def _build_nvidia_chat_model(settings: Settings) -> ChatOpenAI | None:
+    """Raw NVIDIA NIM ChatOpenAI client when the API key is configured.
+
+    Returns the bare ChatOpenAI (NOT wrapped in `with_config`) so callers
+    can compose it with `with_fallbacks(...)` first and apply `with_config`
+    to the OUTSIDE of the fallback chain. Reversing the order makes
+    LangChain see a `RunnableBinding` at the top, which silently skips
+    the fallback path on errors.
+    """
+    if settings.nvidia_api_key is None:
+        return None
+    return ChatOpenAI(
+        model=settings.nvidia_model,
+        api_key=settings.nvidia_api_key.get_secret_value(),
+        base_url=settings.nvidia_base_url,
+        timeout=settings.llm_request_timeout_seconds,
+        max_retries=settings.max_retries,
+        temperature=0,
+        use_responses_api=False,
+    )
 
 @dataclass
 class ResolvedChatModel:
@@ -34,7 +80,7 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
     """
     resolved_provider = provider or settings.llm_default_provider
 
-    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini", "openrouter"}:
+    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini", "openrouter", "nvidia"}:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             f"Неизвестный LLM provider: '{resolved_provider}'.",
@@ -51,6 +97,9 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
 
     if resolved_provider == "openrouter":
         return "openrouter", settings.openrouter_model
+
+    if resolved_provider == "nvidia":
+        return "nvidia", settings.nvidia_model
 
     return "modal_glm", settings.modal_glm_model
 
@@ -122,7 +171,11 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                 "GOOGLE_API_KEY не настроен.",
                 http_status=500,
             )
-        instance = ChatGoogleGenerativeAI(
+        # Build the raw chat models WITHOUT `with_config` first. Compose
+        # `with_fallbacks` INSIDE, then apply `with_config` to the combined
+        # runnable. Reversing the order makes LangChain see a RunnableBinding
+        # at the top, which silently skips the fallback path on errors.
+        primary = ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=settings.google_api_key.get_secret_value(),
             temperature=0,
@@ -130,36 +183,70 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             max_retries=settings.max_retries,
             rate_limiter=get_gemini_rate_limiter(settings),
         )
+
+        # Прозрачный auto-failover: если Gemini вернул любую ошибку
+        # (FAILED_PRECONDITION region, RESOURCE_EXHAUSTED quota, 5xx и т.п.) —
+        # LangChain сам повторяет запрос через цепочку OpenRouter → NVIDIA.
+        # Никакого state, никакого ручного try/except в верхних слоях.
+        # См. docs: https://python.langchain.com/docs/how_to/fallbacks/
+        composed: object = primary
+        if settings.llm_enable_fallback:
+            fallback_chain: list[object] = []
+            openrouter_fallback = _build_openrouter_chat_model(settings)
+            if openrouter_fallback is not None:
+                fallback_chain.append(openrouter_fallback)
+            nvidia_fallback = _build_nvidia_chat_model(settings)
+            if nvidia_fallback is not None:
+                fallback_chain.append(nvidia_fallback)
+            if fallback_chain:
+                composed = primary.with_fallbacks(fallback_chain)
+                fallback_models = []
+                if openrouter_fallback is not None:
+                    fallback_models.append(f"openrouter:{settings.openrouter_model}")
+                if nvidia_fallback is not None:
+                    fallback_models.append(f"nvidia:{settings.nvidia_model}")
+                msg = f"!!! FAILOVER: Gemini chat model wired with fallbacks → {', '.join(fallback_models)}"
+                print(msg)  # also goes to uvicorn stdout
+                logger.info(msg)
+            else:
+                msg = "!!! FAILOVER: no fallbacks configured — Gemini runs alone."
+                print(msg)
+                logger.info(msg)
+
+        instance = composed.with_config(RunnableConfig(max_concurrency=1))
+
         return ResolvedChatModel(
             provider="gemini",
             model_name=model_name,
-            instance=instance.with_config(RunnableConfig(max_concurrency=1)),
+            instance=instance,
         )
 
     if resolved_provider == "openrouter":
-        if settings.openrouter_api_key is None:
+        raw = _build_openrouter_chat_model(settings)
+        if raw is None:
             raise AppError(
                 ErrorCode.LLM_NOT_CONFIGURED,
                 "OPENROUTER_API_KEY не настроен.",
                 http_status=500,
             )
-        instance = ChatOpenAI(
-            model=model_name,
-            api_key=settings.openrouter_api_key.get_secret_value(),
-            base_url=settings.openrouter_base_url,
-            timeout=settings.llm_request_timeout_seconds,
-            max_retries=settings.max_retries,
-            temperature=0,
-            use_responses_api=False,
-            default_headers={
-                "HTTP-Referer": "https://github.com/Arina-bear/PubChem-RAG-Agent",
-                "X-Title": "PubChem RAG Agent",
-            },
-        )
         return ResolvedChatModel(
             provider="openrouter",
             model_name=model_name,
-            instance=instance.with_config(RunnableConfig(max_concurrency=1)),
+            instance=raw.with_config(RunnableConfig(max_concurrency=1)),
+        )
+
+    if resolved_provider == "nvidia":
+        raw = _build_nvidia_chat_model(settings)
+        if raw is None:
+            raise AppError(
+                ErrorCode.LLM_NOT_CONFIGURED,
+                "NVIDIA_API_KEY не настроен.",
+                http_status=500,
+            )
+        return ResolvedChatModel(
+            provider="nvidia",
+            model_name=model_name,
+            instance=raw.with_config(RunnableConfig(max_concurrency=1)),
         )
 
     if resolved_provider == "modal_glm":

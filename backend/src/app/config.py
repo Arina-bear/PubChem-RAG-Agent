@@ -43,11 +43,25 @@ class Settings(BaseSettings):
     # 13 даёт безопасный запас под 15-RPM лимит, при -3-flash-preview лучше переопределить в .env на 4.
     llm_rate_limit_gemini_rpm: int = 13
 
-    # OpenRouter — fallback OpenAI-совместимый шлюз (используется когда Google
-    # недоступен из-за региона/VPN). https://openrouter.ai/docs
+    # OpenRouter — первый fallback OpenAI-совместимого типа.
+    # https://openrouter.ai/docs
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "google/gemma-4-31b-it:free"
+
+    # NVIDIA NIM — второй fallback. Тоже OpenAI-совместимый, не зависит от
+    # Google → выручает когда OpenRouter free pool тоже rate-limited.
+    # Получить ключ: https://build.nvidia.com (Build with NVIDIA, бесплатно)
+    nvidia_api_key: SecretStr | None = None
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "meta/llama-3.3-70b-instruct"
+
+    # Авто-failover Gemini → OpenRouter → NVIDIA. Включён по умолчанию: если
+    # основной Google-вызов падает (FAILED_PRECONDITION, RESOURCE_EXHAUSTED,
+    # 5xx и т.п.) и хотя бы один fallback настроен — LangChain прозрачно
+    # повторяет запрос через цепочку. Установи в `false`, чтобы отлаживать
+    # Gemini без скрытого fallback.
+    llm_enable_fallback: bool = True
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
