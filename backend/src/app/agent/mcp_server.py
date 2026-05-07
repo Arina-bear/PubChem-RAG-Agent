@@ -93,26 +93,28 @@ async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, l
 
 # --- TOOLS ---
 
-@mcp.tool(name="search_by_name_pubchem")
-async def search_by_name_pubchem(name: str, limit: int = 5) -> dict:
+@mcp.tool(name="search_compound_by_name")
+async def search_compound_by_name(name: str, limit: int = 5) -> dict:
     clean_name = name.replace(" ", "").strip()
     args = SearchByNameInput(name=clean_name, limit=limit)
     async with httpx.AsyncClient(timeout=15) as client:
         encoded_name = urllib.parse.quote(args.name)
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/cids/JSON"
         return await _perform_search(client, url, args.name, args.limit)
-    
-@mcp.tool(name="search_by_smiles_pubchem")
-async def search_by_smiles_pubchem(smiles: str, limit: int = 5) -> dict:
+
+
+@mcp.tool(name="search_compound_by_smiles")
+async def search_compound_by_smiles(smiles: str, limit: int = 5) -> dict:
     clean_smiles = smiles.replace(" ", "").strip()
-    args = SearchBySMILESInput(smiles = clean_smiles, limit=limit)
+    args = SearchBySMILESInput(smiles=clean_smiles, limit=limit)
     async with httpx.AsyncClient(timeout=15) as client:
         encoded_smiles = urllib.parse.quote(args.smiles)
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{encoded_smiles}/cids/JSON"
         return await _perform_search(client, url, args.smiles, args.limit)
 
-@mcp.tool(name="search_by_formula_pubchem")
-async def search_by_formula_pubchem(formula: str, limit: int = 5) -> dict:
+
+@mcp.tool(name="search_compound_by_formula")
+async def search_compound_by_formula(formula: str, limit: int = 5) -> dict:
     clean_formula = formula.replace(" ", "").strip()
     args = SearchByFormulaInput(formula=clean_formula, limit=limit)
     async with httpx.AsyncClient(timeout=15) as client:
@@ -120,8 +122,9 @@ async def search_by_formula_pubchem(formula: str, limit: int = 5) -> dict:
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{encoded_formula}/cids/JSON"
         return await _perform_search(client, url, args.formula, args.limit)
 
-@mcp.tool(name="search_by_inchikey_pubchem")
-async def search_by_inchikey_pubchem(inchikey: str, limit: int = 5) -> dict:
+
+@mcp.tool(name="search_compound_by_inchikey")
+async def search_compound_by_inchikey(inchikey: str, limit: int = 5) -> dict:
     clean_inchikey = inchikey.replace(" ", "").strip()
     args = SearchByInChIKeyArgs(inchikey=clean_inchikey, limit=limit)
     async with httpx.AsyncClient(timeout=15) as client:

@@ -68,7 +68,7 @@ def build_container(settings: Settings | None = None) -> AppContainer:
     server_config = {
         "pubchem": {
             "command": "python",
-            "args": ["-m", "app.agent.msp_server"],
+            "args": ["-m", "app.agent.mcp_server"],
             "transport": "stdio",
      }
     }

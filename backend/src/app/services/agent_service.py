@@ -27,11 +27,10 @@ from app.schemas.query import QueryRequest
 import logging
 logger = logging.getLogger(__name__)
 MCP_LOOKUP_MAP = {
-    "search_by_name_pubchem": "name",
-    "search_by_smiles_pubchem": "smiles",
-    "get_by_cid": "cid",
-    "search_by_formula_pubchem": "formula",
-    "search_compound_by_inchikey": "inchikey"
+    "search_compound_by_name": "name",
+    "search_compound_by_smiles": "smiles",
+    "search_compound_by_formula": "formula",
+    "search_compound_by_inchikey": "inchikey",
 }
 
 class AgentService:
@@ -326,26 +325,6 @@ def _infer_explanation(
         
         explanation.append(msg)
 
-    #анализ использованных тулов
-    executed_tools = {entry.tool_name for entry in tool_trace if not entry.error_message}
-    
-    if "search_compound_by_mass_range" in executed_tools:
-        explanation.append(
-            "Выполнен поиск в диапазоне масс для уточнения параметров." if is_russian 
-            else "Performed a mass range search to refine parameters."
-        )
-
-    if "get_compound_summary" in executed_tools:
-        explanation.append(
-            "Получена детальная сводка характеристик для найденного соединения." if is_russian 
-            else "Fetched a detailed summary for the identified compound."
-        )
-
-    if "search_by_synonym_pubchem" in executed_tools:
-        explanation.append(
-            "Проведен дополнительный поиск по базе синонимов." if is_russian 
-            else "Conducted an additional search in the synonyms database."
-        )
 ###проверка результата
     if primary is not None:
 
