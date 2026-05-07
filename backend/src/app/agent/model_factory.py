@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 #from langchain_community.chat_models import ChatOllama
 from langchain_ollama import ChatOllama
 from langchain_google_genai import ChatGoogleGenerativeAI
+from app.agent.rate_limiters import get_gemini_rate_limiter
 from app.config import Settings
 from app.errors.models import AppError, ErrorCode
 from app.schemas.agent import LLMProviderName
@@ -124,6 +125,7 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             temperature=0,
             timeout=settings.llm_request_timeout_seconds,
             max_retries=settings.max_retries,
+            rate_limiter=get_gemini_rate_limiter(settings),
         )
         return ResolvedChatModel(
             provider="gemini",

@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     modal_glm_disable_thinking: bool = True
     google_api_key: SecretStr | None = None
     gemini_model: str = "gemini-3-flash-preview"
+    # Free tier для gemini-3-flash-preview = 5 RPM, для gemma-4-31b-it / gemini-3.1-flash-lite-preview ≈ 15 RPM.
+    # 13 даёт безопасный запас под 15-RPM лимит, при -3-flash-preview лучше переопределить в .env на 4.
+    llm_rate_limit_gemini_rpm: int = 13
 
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
