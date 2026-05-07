@@ -1,9 +1,11 @@
 # Infra
 
-## Local Langfuse (tracing)
+## Local Langfuse (tracing) — v3 со встроенным авто-bootstrap
 
-`langfuse-compose.yml` запускает локальный self-hosted Langfuse v2
-(Postgres + Langfuse web) для просмотра трейсов агента и LLM-вызовов.
+`langfuse-compose.yml` поднимает полный self-hosted стек Langfuse v3
+(Postgres + ClickHouse + Redis + MinIO + langfuse-web + langfuse-worker)
+и **автоматически** создаёт организацию, проект, пользователя и API-ключи
+через `LANGFUSE_INIT_*` переменные. Никакого ручного signup.
 
 ### Запуск
 
@@ -11,69 +13,90 @@
 docker compose -f infra/langfuse-compose.yml up -d
 ```
 
-Через ~30 секунд:
+Через ~30–40 секунд Langfuse готов:
 
-1. Открой <http://localhost:3030>
-2. **Sign up** (любой email/password — это локальный dev, не настоящая
-   почта)
-3. Создай **Organization** → **Project**
-4. Перейди в **Settings → API keys** → **Create new API keys**
-5. Скопируй `Public Key` (начинается с `pk-lf-...`) и `Secret Key`
-   (начинается с `sk-lf-...`)
-6. Открой `backend/.env` и заполни:
+- **UI**: <http://localhost:3030> (логин: `dev@example.com` / `dev-pass-12345`)
+- **Public Key**: `pk-lf-local-dev-public`
+- **Secret Key**: `sk-lf-local-dev-secret`
 
-   ```env
-   LANGFUSE_PUBLIC_KEY=pk-lf-...
-   LANGFUSE_SECRET_KEY=sk-lf-...
-   LANGFUSE_BASE_URL=http://localhost:3030
-   ```
+Project уже создан (`pubchem-rag` под организацией `pubchem-org`).
 
-7. Перезапусти `./scripts/dev.sh`. Каждый запрос к агенту теперь
-   будет создавать трейс в Langfuse → раздел **Traces**.
+### Подключить backend
+
+В `backend/.env`:
+
+```env
+LANGFUSE_PUBLIC_KEY=pk-lf-local-dev-public
+LANGFUSE_SECRET_KEY=sk-lf-local-dev-secret
+LANGFUSE_BASE_URL=http://localhost:3030
+```
+
+Перезапусти `./scripts/dev.sh`. Каждый запрос к агенту теперь создаёт
+trace в Langfuse → раздел **Traces**.
+
+### Что увидишь в UI
+
+На один `POST /api/agent {"text":"найди парацетамол"}` — ровно **9
+observations** в одном trace:
+
+| # | Тип | Имя | Latency |
+|---|---|---|---|
+| 1 | GENERATION | `ChatGoogleGenerativeAI` (`gemma-4-31b-it`) | ~7s |
+| 2 | TOOL | `search_compound_by_name` | ~1s |
+| 3 | GENERATION | `ChatGoogleGenerativeAI` (после tool result) | ~8s |
+| 4-9 | CHAIN | `LangGraph` / `model` / `tools` / `ToolCallLimitMiddleware` | <1s |
+
+Плюс тэги `[gemini, mcp-architecture, pubchem-agent]`, input/output,
+token usage (input/output/total).
 
 ### Остановка
 
 ```bash
-docker compose -f infra/langfuse-compose.yml down
+docker compose -f infra/langfuse-compose.yml down       # сохраняет данные
+docker compose -f infra/langfuse-compose.yml down -v    # сносит volumes
 ```
 
-Чтобы удалить ещё и Postgres-данные (свежий старт):
+### Порты на хосте (все на `127.0.0.1`)
+
+| Сервис | Порт | Зачем |
+|---|---|---|
+| `langfuse-web` | `3030` | UI + публичное API (3000 в контейнере) |
+| `langfuse-postgres` | `5433` | psql/pg_dump (если нужно) |
+| `langfuse-clickhouse` | `8123, 9000` | HTTP + native protocol |
+| `langfuse-minio` | `9090, 9091` | S3 API + MinIO console |
+| `langfuse-redis` | `6380` | redis-cli |
+
+### Почему v3 (а не v2)
+
+v2 single-container больше не поддерживается официально (Zod-валидация
+в свежих образах требует переменных, которые v2 не документирует).
+v3 с шестью сервисами — текущая поддерживаемая архитектура; для одного
+разработчика занимает ~1 GB RAM в покое.
+
+### Если что-то не запускается
 
 ```bash
+# Контейнер веб-приложения — основной источник ошибок
+docker logs pubchem-langfuse --tail 50
+
+# Worker (фоновая обработка трейсов)
+docker logs pubchem-langfuse-worker --tail 50
+
+# Полный сброс (volumes тоже снести):
 docker compose -f infra/langfuse-compose.yml down -v
+docker compose -f infra/langfuse-compose.yml up -d
 ```
 
-### Что увидишь в Langfuse UI
-
-- **Trace** на каждый POST `/api/agent` — со всем cycle: разбор
-  запроса → MCP tool call (`search_compound_by_name`) → ответ
-  Gemini-3-flash-preview.
-- **Tags**: `pubchem-agent`, `mcp-architecture`, провайдер
-  (`gemini`/`openai`/`ollama`).
-- **Latency / token usage** для каждой LLM-итерации.
-- **Tool inputs/outputs** — фактические JSON-payload'ы от PubChem REST.
-
-### Ports / volumes
-
-| Сервис | Host | Container | Volume |
-|---|---|---|---|
-| Langfuse web | `127.0.0.1:3030` | `:3000` | — |
-| Langfuse Postgres | `127.0.0.1:5433` | `:5432` | `langfuse_postgres_data` |
-
-Bind на `127.0.0.1` чтобы Postgres не торчал на 0.0.0.0.
-
-### Почему v2, а не v3
-
-Langfuse v3 (текущий релиз) требует пять сервисов: Postgres,
-ClickHouse, Redis, MinIO, langfuse-web, langfuse-worker — это
-~6 GB RAM и долгий первый запуск. Для локального dev одного
-контейнера v2 + Postgres достаточно. Для production self-host
-переходи на v3 по [официальной инструкции](https://langfuse.com/docs/deployment/self-host).
+Частые причины 500-ок при старте:
+- `ENCRYPTION_KEY` должен быть **64 hex-символа** в кавычках в YAML
+  (без кавычек YAML может прочитать `0000…` как число `0`).
+- `LANGFUSE_INIT_USER_EMAIL` должен быть валидным email с TLD
+  (`dev@example.com`, не `dev@localhost`).
 
 ## Основной dev-стек (`docker-compose.yml`)
 
-`docker-compose.yml` (соседний файл) собирает образ FastAPI +
-Chainlit из `backend/` и поднимает Redis. **Этот compose не
-обязателен для локального dev** — `./scripts/dev.sh` запускает
-оба процесса напрямую через `uv run` без Docker. Используй
-`docker-compose.yml` только для production-подобной проверки.
+`docker-compose.yml` (соседний файл) собирает образ FastAPI + Chainlit
+из `backend/` и поднимает Redis. **Этот compose не обязателен для
+локального dev** — `./scripts/dev.sh` запускает оба процесса
+напрямую через `uv run` без Docker. Используй `docker-compose.yml`
+только для production-подобной проверки.
