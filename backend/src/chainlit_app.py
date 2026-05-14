@@ -242,7 +242,11 @@ async def on_message(message: cl.Message) -> None:
         synonyms = extract_primary_synonyms(response, primary.cid)
         inline_elements.append(
             cl.CustomElement(
-                name="CompoundCard",
+                # Renamed to V2 so the browser cannot serve the cached old
+                # JSX bundle for /public/elements/CompoundCard.jsx — Chainlit
+                # 2.11 does not version-hash custom-element URLs, so the
+                # only reliable way to bust a stuck client is a new filename.
+                name="CompoundCardV2",
                 props=build_compound_card_props(
                     primary,
                     explanation=normalized.explanation,
