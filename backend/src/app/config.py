@@ -23,11 +23,12 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 30.0
     llm_request_timeout_seconds: float = 120.0
     agent_run_timeout_seconds: float = 240.0
-    max_retries: int = 4
-    # Каждый fallback провайдер тоже делает до 4 попыток — глобальные
-    # сбои у одного провайдера часто длятся секундами и проходят с
-    # экспоненциальным backoff, прежде чем нужно идти дальше по цепочке.
-    llm_fallback_max_retries: int = 4
+    # 2 retry на primary — достаточно для transient 5xx; больше упирается
+    # в curl/UI timeout (12 попыток × 3 провайдера × ~10s = 6 минут).
+    max_retries: int = 2
+    # Fallback провайдер делает 1 попытку и сразу advance к следующему,
+    # вместо того чтобы долбить тот же endpoint.
+    llm_fallback_max_retries: int = 1
     candidate_limit: int = 10
     query_rate_limit_per_second: int = 3
     heavy_query_concurrency: int = 1
@@ -68,7 +69,11 @@ class Settings(BaseSettings):
     # Получить ключ: https://build.nvidia.com (Build with NVIDIA, бесплатно)
     nvidia_api_key: SecretStr | None = None
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
-    nvidia_model: str = "z-ai/glm4.7"
+    # Note: z-ai/glm4.7 reached EOL on 2026-05-14 on NVIDIA NIM (410 Gone).
+    # meta/llama-3.3-70b-instruct is the stable replacement with native tool
+    # calling; swap to `nvidia/llama-3.3-nemotron-super-49b-v1` if you want a
+    # smaller, NVIDIA-tuned variant.
+    nvidia_model: str = "meta/llama-3.3-70b-instruct"
 
     # Авто-failover Gemini → OpenRouter → NVIDIA. Включён по умолчанию: если
     # основной Google-вызов падает (FAILED_PRECONDITION, RESOURCE_EXHAUSTED,
