@@ -84,7 +84,12 @@ class Settings(BaseSettings):
     # https://console.mistral.ai/home?profile_dialog=api-keys
     mistral_api_key: SecretStr | None = None
     mistral_base_url: str = "https://api.mistral.ai/v1"
-    mistral_model: str = "mistral-medium-latest"
+    # Mistral Medium 3.5 — frontier-class, агентский/кодовый use case,
+    # 262K context, Apr 2026. Альтернативы:
+    #   magistral-small-latest (Mistral Small 4, быстрее)
+    #   mistral-large-latest (Mistral Large 3, мощнее но медленнее)
+    #   ministral-14b-latest (edge, очень быстро)
+    mistral_model: str = "mistral-medium-3.5"
 
     # Авто-failover Gemini → OpenRouter → NVIDIA. Включён по умолчанию: если
     # основной Google-вызов падает (FAILED_PRECONDITION, RESOURCE_EXHAUSTED,
