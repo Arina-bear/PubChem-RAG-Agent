@@ -229,14 +229,14 @@ async def on_message(message: cl.Message) -> None:
             cl.Image(
                 name=f"CID {primary.cid} structure",
                 url=build_structure_image_url(primary.cid),
-                display="inline",
+                display="side",
             )
         )
         sidebar_elements.append(
             cl.Text(
                 name="properties",
                 content=_build_details_markdown(response),
-                display="inline",
+                display="side",
             )
         )
 
@@ -249,7 +249,7 @@ async def on_message(message: cl.Message) -> None:
             cl.Text(
                 name="candidates",
                 content="### Другие кандидаты\n" + build_candidates_markdown(normalized.matches[1:]),
-                display="inline",
+                display="side",
             )
         )
 
@@ -268,14 +268,25 @@ async def on_message(message: cl.Message) -> None:
             normalized.clarification_question or "Агент завершил поиск без дополнительного пояснения."
         )
 
+    # Visibility into what the UI is being told to render — these go to
+    # uvicorn/chainlit stdout so an operator can see exactly which custom
+    # elements and sidebar items left the backend on a given turn.
+    print(
+        f"!!! RENDER inline={[el.__class__.__name__ + ':' + (getattr(el, 'name', '?') or '?') for el in inline_elements]} "
+        f"sidebar={[el.__class__.__name__ + ':' + (getattr(el, 'name', '?') or '?') for el in sidebar_elements]} "
+        f"primary_cid={primary.cid if primary else None}"
+    )
+
     await cl.Message(
         content=f"{normalized.final_answer}{explanation_block}{clarification_block}",
         elements=inline_elements,
         author="PubChem Agent",
     ).send()
 
-    # Push extras to the explicit element sidebar (officially supported in 2.11)
-    # instead of legacy `display="side"` on individual elements (issue #1827).
+    # Push extras to the explicit element sidebar. The elements also keep
+    # display="side" so Chainlit's legacy side-view effect does not clear the
+    # explicit sidebar while it processes the emitted element events.
     if sidebar_elements:
         await cl.ElementSidebar.set_title(f"Подробности — {primary.title or 'вещество'}" if primary else "Подробности")
-        await cl.ElementSidebar.set_elements(sidebar_elements)
+        await cl.ElementSidebar.set_elements(sidebar_elements, key=trace_id)
+        print(f"!!! SIDEBAR sent {len(sidebar_elements)} elements + title='Подробности — {primary.title if primary else 'вещество'}'")
