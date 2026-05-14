@@ -22,32 +22,80 @@ import urllib.parse
 import json
 from typing import Any
 
+_PROPERTY_FIELDS = (
+    "Title",
+    "MolecularFormula",
+    "MolecularWeight",
+    "IUPACName",
+    "CanonicalSMILES",
+    "IsomericSMILES",
+    "InChIKey",
+    "ExactMass",
+    "XLogP",
+    "TPSA",
+    "Complexity",
+    "HBondDonorCount",
+    "HBondAcceptorCount",
+    "Charge",
+)
+
+
+def _coerce_float(value):
+    try:
+        return float(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_int(value):
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
-    """Безопасно запрашивает свойства вещества. При ошибке возвращает базовую инфо."""
-    prop_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/MolecularFormula,MolecularWeight,Title/JSON"
-    
+    """Один REST-вызов к PubChem забирает все колонки, которые шоу в CompoundCard
+    и в боковой панели «Свойства вещества». При сетевой ошибке возвращаем
+    только cid + title-плейсхолдер, чтобы LangChain агент мог продолжить."""
+    prop_url = (
+        f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/property/"
+        + ",".join(_PROPERTY_FIELDS)
+        + "/JSON"
+    )
     try:
         async with global_sem:
             response = await client.get(prop_url, timeout=5.0)
             await asyncio.sleep(0.1)
-        
+
         if response.status_code == 200:
             data = response.json()
-            props = data['PropertyTable']['Properties'][0]
+            props = data["PropertyTable"]["Properties"][0]
             return {
                 "cid": cid,
-                "title": props.get('Title'),
-                "molecular_formula": props.get('MolecularFormula'),
-                "molecular_weight": float(props['MolecularWeight']) if props.get('MolecularWeight') else None
+                "title": props.get("Title"),
+                "molecular_formula": props.get("MolecularFormula"),
+                "molecular_weight": _coerce_float(props.get("MolecularWeight")),
+                "iupac_name": props.get("IUPACName"),
+                "canonical_smiles": props.get("CanonicalSMILES"),
+                "isomeric_smiles": props.get("IsomericSMILES"),
+                "inchi_key": props.get("InChIKey"),
+                "exact_mass": _coerce_float(props.get("ExactMass")),
+                "xlogp": _coerce_float(props.get("XLogP")),
+                "tpsa": _coerce_float(props.get("TPSA")),
+                "complexity": _coerce_float(props.get("Complexity")),
+                "hbond_donor_count": _coerce_int(props.get("HBondDonorCount")),
+                "hbond_acceptor_count": _coerce_int(props.get("HBondAcceptorCount")),
+                "charge": _coerce_int(props.get("Charge")),
             }
     except Exception:
         pass
-    
+
     return {
         "cid": cid,
         "title": f"CID {cid}",
         "molecular_formula": None,
-        "molecular_weight": None
+        "molecular_weight": None,
     }
 
 async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, limit: int) -> dict:

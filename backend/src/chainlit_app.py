@@ -54,6 +54,14 @@ def _humanize_runtime_error(exc: BaseException) -> str:
 
 
 def _build_details_markdown(response: AgentResponseEnvelope) -> str:
+    """Markdown for the right side panel.
+
+    The MCP search tools only return cid / title / formula / molecular_weight
+    today, so the rich-field block (IUPAC, SMILES, XLogP…) is almost always
+    empty. Without a fallback the panel ends up as a lonely "### Подробности"
+    header. Always emit the basics that ARE available, plus the trace and a
+    direct PubChem link, so the user has something useful to look at.
+    """
     normalized = response.normalized
     if normalized is None:
         return "Подробные сведения недоступны."
@@ -62,26 +70,44 @@ def _build_details_markdown(response: AgentResponseEnvelope) -> str:
     if primary is None:
         return build_tool_trace_markdown(response)
 
-    lines = ["### Подробности"]
+    lines: list[str] = [f"### {primary.title or f'CID {primary.cid}'}"]
+
+    basics: list[str] = []
+    basics.append(f"- **PubChem CID:** {primary.cid}")
+    if primary.molecular_formula:
+        basics.append(f"- **Молекулярная формула:** `{primary.molecular_formula}`")
+    if primary.molecular_weight is not None:
+        basics.append(f"- **Молекулярная масса:** {primary.molecular_weight:.2f} г/моль")
     if primary.iupac_name:
-        lines.append(f"- IUPAC: {primary.iupac_name}")
+        basics.append(f"- **IUPAC:** {primary.iupac_name}")
     if primary.canonical_smiles:
-        lines.append(f"- Canonical SMILES: `{primary.canonical_smiles}`")
+        basics.append(f"- **Canonical SMILES:** `{primary.canonical_smiles}`")
     if primary.exact_mass is not None:
-        lines.append(f"- Exact mass: {primary.exact_mass:.4f}")
+        basics.append(f"- **Exact mass:** {primary.exact_mass:.4f}")
     if primary.xlogp is not None:
-        lines.append(f"- XLogP: {primary.xlogp}")
+        basics.append(f"- **XLogP:** {primary.xlogp}")
     if primary.tpsa is not None:
-        lines.append(f"- TPSA: {primary.tpsa}")
+        basics.append(f"- **TPSA:** {primary.tpsa}")
     if primary.complexity is not None:
-        lines.append(f"- Complexity: {primary.complexity}")
+        basics.append(f"- **Complexity:** {primary.complexity}")
     if primary.hbond_donor_count is not None or primary.hbond_acceptor_count is not None:
         donor = primary.hbond_donor_count if primary.hbond_donor_count is not None else "—"
         acceptor = primary.hbond_acceptor_count if primary.hbond_acceptor_count is not None else "—"
-        lines.append(f"- H-bond donors / acceptors: {donor} / {acceptor}")
+        basics.append(f"- **H-bond донор/акцептор:** {donor} / {acceptor}")
+    lines.extend(basics)
+
+    lines.append("")
+    lines.append(f"[Открыть на PubChem ↗](https://pubchem.ncbi.nlm.nih.gov/compound/{primary.cid})")
+
     if primary.description:
         lines.append("")
+        lines.append("#### Описание")
         lines.append(primary.description)
+
+    if normalized.tool_trace:
+        lines.append("")
+        lines.append(build_tool_trace_markdown(response))
+
     return "\n".join(lines)
 
 
@@ -234,7 +260,9 @@ async def on_message(message: cl.Message) -> None:
         )
         sidebar_elements.append(
             cl.Text(
-                name="properties",
+                # Renders as the section heading in the side panel — keep
+                # it user-facing Russian instead of the internal "properties".
+                name="Свойства вещества",
                 content=_build_details_markdown(response),
                 display="side",
             )

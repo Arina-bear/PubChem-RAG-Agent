@@ -37,7 +37,7 @@ export default function CompoundCard() {
   const synonyms = Array.isArray(props.synonyms) ? props.synonyms : []
 
   return (
-    <Card className="w-full max-w-3xl overflow-hidden border-0" style={{ background: "linear-gradient(145deg, hsl(var(--card)) 0%, color-mix(in srgb, hsl(var(--card)) 86%, black) 100%)", color: "hsl(var(--card-foreground))", boxShadow: "0 16px 40px rgba(2, 8, 23, 0.22)" }}>
+    <Card className="w-full max-w-3xl overflow-hidden border" style={{ background: "hsl(var(--card))", color: "hsl(var(--card-foreground))", borderColor: "hsl(var(--border))", boxShadow: "none" }}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
