@@ -344,19 +344,16 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                 "MISTRAL_API_KEY не настроен.",
                 http_status=500,
             )
-        # Mistral-primary failover: Mistral → NVIDIA → OpenRouter → Gemini.
-        # Order mirrors the NVIDIA-primary branch with the front two
-        # providers swapped — keeps the same NVIDIA NIM / Mistral pair at
-        # the top of the chain regardless of which one is the default.
+        # Mistral-primary failover (explicit user-requested order):
+        #   Mistral → Google Gemma → OpenRouter Gemma → NVIDIA Llama
+        # Idea: keep the two Google/Gemma-flavoured fallbacks adjacent so a
+        # Mistral hiccup tries the closest-in-architecture replacement
+        # first; NVIDIA Llama 3.3 70B is the heaviest and slowest option,
+        # so it sits last.
         composed: object = raw
         if settings.llm_enable_fallback:
             fallback_chain: list[object] = []
-            nvidia_fallback = _build_nvidia_chat_model(settings)
-            if nvidia_fallback is not None:
-                fallback_chain.append(nvidia_fallback)
-            openrouter_fallback = _build_openrouter_chat_model(settings)
-            if openrouter_fallback is not None:
-                fallback_chain.append(openrouter_fallback)
+            gemini_fallback = None
             if settings.google_api_key is not None:
                 gemini_fallback = ChatGoogleGenerativeAI(
                     model=settings.gemini_model,
@@ -367,15 +364,21 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                     rate_limiter=get_gemini_rate_limiter(settings),
                 )
                 fallback_chain.append(gemini_fallback)
+            openrouter_fallback = _build_openrouter_chat_model(settings)
+            if openrouter_fallback is not None:
+                fallback_chain.append(openrouter_fallback)
+            nvidia_fallback = _build_nvidia_chat_model(settings)
+            if nvidia_fallback is not None:
+                fallback_chain.append(nvidia_fallback)
             if fallback_chain:
                 composed = raw.with_fallbacks(fallback_chain)
                 fallback_models = []
-                if nvidia_fallback is not None:
-                    fallback_models.append(f"nvidia:{settings.nvidia_model}")
+                if gemini_fallback is not None:
+                    fallback_models.append(f"gemini:{settings.gemini_model}")
                 if openrouter_fallback is not None:
                     fallback_models.append(f"openrouter:{settings.openrouter_model}")
-                if settings.google_api_key is not None:
-                    fallback_models.append(f"gemini:{settings.gemini_model}")
+                if nvidia_fallback is not None:
+                    fallback_models.append(f"nvidia:{settings.nvidia_model}")
                 msg = f"!!! FAILOVER: Mistral chat model wired with fallbacks → {', '.join(fallback_models)}"
                 print(msg)
                 logger.info(msg)
