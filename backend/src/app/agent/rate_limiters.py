@@ -30,6 +30,7 @@ from app.config import Settings
 _gemini_limiter: InMemoryRateLimiter | None = None
 _openrouter_limiter: InMemoryRateLimiter | None = None
 _nvidia_limiter: InMemoryRateLimiter | None = None
+_mistral_limiter: InMemoryRateLimiter | None = None
 
 
 def _build(rpm: int) -> InMemoryRateLimiter:
@@ -71,3 +72,16 @@ def get_nvidia_rate_limiter(settings: Settings) -> InMemoryRateLimiter:
     if _nvidia_limiter is None:
         _nvidia_limiter = _build(settings.llm_rate_limit_nvidia_rpm)
     return _nvidia_limiter
+
+
+def get_mistral_rate_limiter(settings: Settings) -> InMemoryRateLimiter:
+    """Singleton bucket for Mistral La Plateforme calls
+    (`llm_rate_limit_mistral_rpm`).
+
+    Mistral free tier caps each project at 60 RPM (1 req/sec) plus
+    500 000 TPM and 1B tokens/month; we run at 55 RPM to absorb skew.
+    """
+    global _mistral_limiter
+    if _mistral_limiter is None:
+        _mistral_limiter = _build(settings.llm_rate_limit_mistral_rpm)
+    return _mistral_limiter

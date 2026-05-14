@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # ([forums.developer.nvidia.com](https://forums.developer.nvidia.com/t/request-to-increase-nim-api-rate-limit-from-40-rpm-to-200-rpm-for-personal-study/368108));
     # 35 — то же самое с запасом.
     llm_rate_limit_nvidia_rpm: int = 35
+    # Mistral La Plateforme — 60 RPM (1 req/sec) на free tier; 55 — запас
+    # под clock skew с серверной стороной. https://docs.mistral.ai/deployment/laplateforme/tier/
+    llm_rate_limit_mistral_rpm: int = 55
 
     # OpenRouter — первый fallback OpenAI-совместимого типа.
     # https://openrouter.ai/docs
@@ -74,6 +77,14 @@ class Settings(BaseSettings):
     # calling; swap to `nvidia/llama-3.3-nemotron-super-49b-v1` if you want a
     # smaller, NVIDIA-tuned variant.
     nvidia_model: str = "meta/llama-3.3-70b-instruct"
+
+    # Mistral La Plateforme — самый щедрый free tier среди этих провайдеров:
+    # 60 RPM (1 req/sec), 500 000 TPM, 1B токенов/месяц. Tool calling
+    # нативный, OpenAI-совместимый. Получить ключ:
+    # https://console.mistral.ai/home?profile_dialog=api-keys
+    mistral_api_key: SecretStr | None = None
+    mistral_base_url: str = "https://api.mistral.ai/v1"
+    mistral_model: str = "mistral-medium-latest"
 
     # Авто-failover Gemini → OpenRouter → NVIDIA. Включён по умолчанию: если
     # основной Google-вызов падает (FAILED_PRECONDITION, RESOURCE_EXHAUSTED,

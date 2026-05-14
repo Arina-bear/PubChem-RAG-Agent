@@ -8,6 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from app.agent.rate_limiters import (
     get_gemini_rate_limiter,
+    get_mistral_rate_limiter,
     get_nvidia_rate_limiter,
     get_openrouter_rate_limiter,
 )
@@ -43,6 +44,31 @@ def _build_openrouter_chat_model(settings: Settings) -> ChatOpenAI | None:
             "HTTP-Referer": "https://github.com/Arina-bear/PubChem-RAG-Agent",
             "X-Title": "PubChem RAG Agent",
         },
+    )
+
+
+def _build_mistral_chat_model(settings: Settings) -> ChatOpenAI | None:
+    """Raw Mistral La Plateforme ChatOpenAI client when the API key is
+    configured.
+
+    Returns the bare ChatOpenAI (NOT wrapped in `with_config`) so callers
+    can compose it inside a fallback chain (see _build_nvidia_chat_model
+    for the wrapping-order rationale). Uses `llm_fallback_max_retries`
+    because this builder is only ever called from a fallback slot — when
+    Mistral is the explicit primary, the direct-provider branch wraps
+    the same factory.
+    """
+    if settings.mistral_api_key is None:
+        return None
+    return ChatOpenAI(
+        model=settings.mistral_model,
+        api_key=settings.mistral_api_key.get_secret_value(),
+        base_url=settings.mistral_base_url,
+        timeout=settings.llm_request_timeout_seconds,
+        max_retries=settings.llm_fallback_max_retries,
+        rate_limiter=get_mistral_rate_limiter(settings),
+        temperature=0,
+        use_responses_api=False,
     )
 
 
@@ -103,7 +129,7 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
     """
     resolved_provider = provider or settings.llm_default_provider
 
-    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini", "openrouter", "nvidia"}:
+    if resolved_provider not in {"openai", "modal_glm", "ollama", "gemini", "openrouter", "nvidia", "mistral"}:
         raise AppError(
             ErrorCode.VALIDATION_ERROR,
             f"Неизвестный LLM provider: '{resolved_provider}'.",
@@ -123,6 +149,9 @@ def resolve_provider_model_name(settings: Settings, provider: LLMProviderName | 
 
     if resolved_provider == "nvidia":
         return "nvidia", settings.nvidia_model
+
+    if resolved_provider == "mistral":
+        return "mistral", settings.mistral_model
 
     return "modal_glm", settings.modal_glm_model
 
@@ -266,17 +295,20 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                 "NVIDIA_API_KEY не настроен.",
                 http_status=500,
             )
-        # Symmetric failover: when NVIDIA is primary, retry through
-        # OpenRouter and Gemini in that order. Mirrors the Gemini-primary
-        # chain so any default provider gets the same resilience.
+        # Symmetric failover. Order matches the user-requested cascade
+        # NVIDIA NIM → Mistral → OpenRouter → Gemini, sized by free-tier
+        # generosity: Mistral has the most headroom (60 RPM, 1B/month),
+        # OpenRouter is the smallest pool, Gemini is the last resort.
         composed: object = raw
         if settings.llm_enable_fallback:
             fallback_chain: list[object] = []
+            mistral_fallback = _build_mistral_chat_model(settings)
+            if mistral_fallback is not None:
+                fallback_chain.append(mistral_fallback)
             openrouter_fallback = _build_openrouter_chat_model(settings)
             if openrouter_fallback is not None:
                 fallback_chain.append(openrouter_fallback)
             if settings.google_api_key is not None:
-                # Build a raw Gemini fallback (no rate-limiter / config wrap)
                 gemini_fallback = ChatGoogleGenerativeAI(
                     model=settings.gemini_model,
                     google_api_key=settings.google_api_key.get_secret_value(),
@@ -289,6 +321,8 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             if fallback_chain:
                 composed = raw.with_fallbacks(fallback_chain)
                 fallback_models = []
+                if mistral_fallback is not None:
+                    fallback_models.append(f"mistral:{settings.mistral_model}")
                 if openrouter_fallback is not None:
                     fallback_models.append(f"openrouter:{settings.openrouter_model}")
                 if settings.google_api_key is not None:
@@ -300,6 +334,20 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
             provider="nvidia",
             model_name=model_name,
             instance=composed.with_config(RunnableConfig(max_concurrency=1)),
+        )
+
+    if resolved_provider == "mistral":
+        raw = _build_mistral_chat_model(settings)
+        if raw is None:
+            raise AppError(
+                ErrorCode.LLM_NOT_CONFIGURED,
+                "MISTRAL_API_KEY не настроен.",
+                http_status=500,
+            )
+        return ResolvedChatModel(
+            provider="mistral",
+            model_name=model_name,
+            instance=raw.with_config(RunnableConfig(max_concurrency=1)),
         )
 
     if resolved_provider == "modal_glm":
