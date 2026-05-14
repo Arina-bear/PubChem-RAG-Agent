@@ -1,0 +1,537 @@
+[
+  {
+    "id": 1,
+    "query": "Find aspirin.",
+    "difficulty": "simple",
+    "category": "name_search",
+    "expected_behavior": "Locate the compound aspirin using its common name and return its PubChem CID and summary information.",
+    "expected_tools": [
+      "pubchem_name_search"
+    ]
+  },
+  {
+    "id": 2,
+    "query": "Search for the compound with molecular formula C7H8N4O2.",
+    "difficulty": "simple",
+    "category": "formula_search",
+    "expected_behavior": "Identify and retrieve compound(s) matching formula C7H8N4O2 from PubChem.",
+    "expected_tools": [
+      "pubchem_formula_search"
+    ]
+  },
+  {
+    "id": 3,
+    "query": "Get details about CID 3672.",
+    "difficulty": "simple",
+    "category": "cid_lookup",
+    "expected_behavior": "Fetch compound information for PubChem CID 3672, returning canonical name and properties.",
+    "expected_tools": [
+      "pubchem_cid_lookup"
+    ]
+  },
+  {
+    "id": 4,
+    "query": "Find compound by SMILES CC(=O)OC1=CC=CC=C1C(=O)O.",
+    "difficulty": "simple",
+    "category": "smiles_search",
+    "expected_behavior": "Search the PubChem database for the compound represented by the given SMILES string.",
+    "expected_tools": [
+      "pubchem_smiles_search"
+    ]
+  },
+  {
+    "id": 5,
+    "query": "Search for ibuprofen.",
+    "difficulty": "simple",
+    "category": "name_search",
+    "expected_behavior": "Find and return the basic details and PubChem CID for ibuprofen.",
+    "expected_tools": [
+      "pubchem_name_search"
+    ]
+  },
+  {
+    "id": 6,
+    "query": "Get compound with formula C8H9NO2.",
+    "difficulty": "simple",
+    "category": "formula_search",
+    "expected_behavior": "Locate compound(s) with the formula C8H9NO2 and return summary details.",
+    "expected_tools": [
+      "pubchem_formula_search"
+    ]
+  },
+  {
+    "id": 7,
+    "query": "Provide information about CID 2244.",
+    "difficulty": "simple",
+    "category": "cid_lookup",
+    "expected_behavior": "Retrieve and summarize properties of the compound with PubChem CID 2244.",
+    "expected_tools": [
+      "pubchem_cid_lookup"
+    ]
+  },
+  {
+    "id": 8,
+    "query": "Find compound with SMILES CN1C=NC2=C1C(=O)N(C(=O)N2C)C.",
+    "difficulty": "simple",
+    "category": "smiles_search",
+    "expected_behavior": "Search PubChem using the given SMILES string and retrieve compound ID and name.",
+    "expected_tools": [
+      "pubchem_smiles_search"
+    ]
+  },
+  {
+    "id": 9,
+    "query": "Find benzene.",
+    "difficulty": "simple",
+    "category": "name_search",
+    "expected_behavior": "Search for benzene in PubChem, retrieve its CID and summary information.",
+    "expected_tools": [
+      "pubchem_name_search"
+    ]
+  },
+  {
+    "id": 10,
+    "query": "Search compound by SMILES CCN(CC)CCCC(C)NC1=C2C=CC(=CC2=NC=C1)Cl.",
+    "difficulty": "simple",
+    "category": "smiles_search",
+    "expected_behavior": "Return the PubChem details for the compound represented by the provided SMILES.",
+    "expected_tools": [
+      "pubchem_smiles_search"
+    ]
+  },
+  {
+    "id": 11,
+    "query": "Find aromatic compounds with molecular weight around 300.",
+    "difficulty": "medium",
+    "category": "property_filtering",
+    "expected_behavior": "Filter PubChem for aromatic structures with molecular weight in the 280-320 range and return matching compounds.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 12,
+    "query": "Search for beta-lactam antibiotics.",
+    "difficulty": "medium",
+    "category": "substructure_search",
+    "expected_behavior": "Identify beta-lactam antibiotics by detecting their core substructure using PubChem data.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 13,
+    "query": "Find compounds containing both amine and carboxyl groups.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Search for molecules with both amine and carboxyl functional groups, returning results filtered from PubChem.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 14,
+    "query": "Find molecules similar to caffeine.",
+    "difficulty": "medium",
+    "category": "similarity_search",
+    "expected_behavior": "Run a similarity search using caffeine as the reference and return compounds with high chemical similarity.",
+    "expected_tools": [
+      "pubchem_similarity_search"
+    ]
+  },
+  {
+    "id": 15,
+    "query": "List compounds with logP greater than 3.0.",
+    "difficulty": "medium",
+    "category": "physicochemical_filtering",
+    "expected_behavior": "Identify compounds where the measured or predicted logP is above 3.0, using PubChem.",
+    "expected_tools": [
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 16,
+    "query": "Search antibiotics structurally related to penicillin.",
+    "difficulty": "medium",
+    "category": "similarity_search",
+    "expected_behavior": "Retrieve antibiotics with a chemical structure similar to penicillin by leveraging PubChem similarity search.",
+    "expected_tools": [
+      "pubchem_similarity_search"
+    ]
+  },
+  {
+    "id": 17,
+    "query": "Find compounds with exactly two aromatic rings.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Detect compounds featuring two aromatic rings and return compound details.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 18,
+    "query": "Filter drugs by molecular weight between 150 and 300.",
+    "difficulty": "medium",
+    "category": "property_filtering",
+    "expected_behavior": "Return a list of drugs whose molecular weights fall within the specified range using PubChem data.",
+    "expected_tools": [
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 19,
+    "query": "Find beta-lactam antibiotics with a carboxyl group.",
+    "difficulty": "medium",
+    "category": "substructure_search",
+    "expected_behavior": "Identify beta-lactam antibiotics containing at least one carboxyl functional group.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 20,
+    "query": "List all penicillin derivatives with a sulfur atom.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Return penicillin derivatives containing sulfur by substructure and atom composition search.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 21,
+    "query": "Find compounds similar to theobromine with less than 32 heavy atoms.",
+    "difficulty": "medium",
+    "category": "similarity_search",
+    "expected_behavior": "Locate compounds structurally similar to theobromine and filter by heavy atom count.",
+    "expected_tools": [
+      "pubchem_similarity_search",
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 22,
+    "query": "Search for drugs with an ether group.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Find and return compounds with at least one ether functional group present.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 23,
+    "query": "Filter analgesic compounds by polar surface area above 70 Å².",
+    "difficulty": "medium",
+    "category": "physicochemical_filtering",
+    "expected_behavior": "Identify analgesic compounds where the polar surface area exceeds 70 Å².",
+    "expected_tools": [
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 24,
+    "query": "Find compounds with a primary amine group and logP below 1.0.",
+    "difficulty": "medium",
+    "category": "property_filtering",
+    "expected_behavior": "Locate compounds possessing a primary amine with logP less than 1.0 in PubChem.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 25,
+    "query": "Identify antibiotics containing a beta-lactam ring and an amide group.",
+    "difficulty": "medium",
+    "category": "substructure_search",
+    "expected_behavior": "Return antibiotic compounds with both a beta-lactam ring and an amide group using substructure search.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 26,
+    "query": "List molecules with an acetamide group.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Find compounds featuring an acetamide group using functional group analysis.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 27,
+    "query": "Retrieve corticosteroids with a ketone group.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Search for corticosteroid compounds containing a ketone functional group.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 28,
+    "query": "Find NSAIDs with molecular weight under 300.",
+    "difficulty": "medium",
+    "category": "property_filtering",
+    "expected_behavior": "Filter non-steroidal anti-inflammatory drugs whose molecular weights are less than 300.",
+    "expected_tools": [
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 29,
+    "query": "Search for paracetamol derivatives.",
+    "difficulty": "medium",
+    "category": "similarity_search",
+    "expected_behavior": "Identify chemical derivatives of paracetamol based on structure similarity.",
+    "expected_tools": [
+      "pubchem_similarity_search"
+    ]
+  },
+  {
+    "id": 30,
+    "query": "Find compounds with both phenol and ester groups.",
+    "difficulty": "medium",
+    "category": "structure_analysis",
+    "expected_behavior": "Locate compounds containing both phenol and ester groups using function group extraction.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 31,
+    "query": "Compare aspirin and ibuprofen by toxicity and mechanism of action.",
+    "difficulty": "complex",
+    "category": "comparison",
+    "expected_behavior": "Summarize and contrast the toxicological profiles and mechanisms of action of aspirin and ibuprofen, using PubChem and external knowledge.",
+    "expected_tools": [
+      "comparison_tool",
+      "toxicity_analysis_tool",
+      "pubchem_name_search"
+    ]
+  },
+  {
+    "id": 32,
+    "query": "Find aromatic compounds containing nitrogen with molecular weight between 250 and 350.",
+    "difficulty": "complex",
+    "category": "multi_step_reasoning",
+    "expected_behavior": "Identify compounds with both aromatic rings and at least one nitrogen atom, filtered by molecular weight.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 33,
+    "query": "Analyze differences between caffeine and theobromine.",
+    "difficulty": "complex",
+    "category": "comparison",
+    "expected_behavior": "Extract and compare key structural, physicochemical, and biological activity differences between caffeine and theobromine.",
+    "expected_tools": [
+      "comparison_tool",
+      "pubchem_name_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 34,
+    "query": "Compare beta-lactam antibiotics by antibacterial spectrum.",
+    "difficulty": "complex",
+    "category": "pharmacology",
+    "expected_behavior": "Summarize and compare antibacterial spectra of different beta-lactam antibiotics.",
+    "expected_tools": [
+      "comparison_tool",
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 35,
+    "query": "Find compounds similar to aspirin but with lower molecular weight.",
+    "difficulty": "complex",
+    "category": "multi_step_reasoning",
+    "expected_behavior": "Search for compounds structurally similar to aspirin, filtered for lower molecular weight and return property summaries.",
+    "expected_tools": [
+      "pubchem_similarity_search",
+      "pubchem_property_filter",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 36,
+    "query": "Compare toxicity of benzene and toluene in humans.",
+    "difficulty": "complex",
+    "category": "toxicity_analysis",
+    "expected_behavior": "Extract and compare toxicological data for benzene and toluene focusing on human data.",
+    "expected_tools": [
+      "toxicity_analysis_tool",
+      "pubchem_name_search",
+      "comparison_tool"
+    ]
+  },
+  {
+    "id": 37,
+    "query": "Find non-aromatic NSAIDs with logP below 2.0.",
+    "difficulty": "complex",
+    "category": "property_filtering",
+    "expected_behavior": "Identify NSAID compounds without aromatic rings and logP under 2.0.",
+    "expected_tools": [
+      "pubchem_property_filter",
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 38,
+    "query": "Compare structures and mechanism of action of amoxicillin and penicillin G.",
+    "difficulty": "complex",
+    "category": "mechanism_analysis",
+    "expected_behavior": "Provide a comparative structural and mechanistic analysis between amoxicillin and penicillin G.",
+    "expected_tools": [
+      "comparison_tool",
+      "pubchem_name_search",
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 39,
+    "query": "Find painkillers structurally different from NSAIDs.",
+    "difficulty": "complex",
+    "category": "structure_filtering",
+    "expected_behavior": "Search for analgesic compounds whose core structure does not match typical NSAID substructures.",
+    "expected_tools": [
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 40,
+    "query": "Analyze biological activity differences between penicillin and amoxicillin.",
+    "difficulty": "complex",
+    "category": "biological_activity",
+    "expected_behavior": "Compare biological activities and indications of penicillin vs amoxicillin.",
+    "expected_tools": [
+      "comparison_tool",
+      "pubchem_name_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 41,
+    "query": "Identify antibiotics effective against Pseudomonas aeruginosa.",
+    "difficulty": "complex",
+    "category": "pharmacology",
+    "expected_behavior": "Find antibiotics with demonstrated efficacy against Pseudomonas aeruginosa utilizing PubChem and external knowledge.",
+    "expected_tools": [
+      "pubchem_name_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 42,
+    "query": "List compounds structurally similar to paracetamol but less hepatotoxic.",
+    "difficulty": "complex",
+    "category": "toxicity_analysis",
+    "expected_behavior": "Identify paracetamol analogs, filter by lower predicted hepatotoxicity, and summarize chemical/biological data.",
+    "expected_tools": [
+      "pubchem_similarity_search",
+      "toxicity_analysis_tool",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 43,
+    "query": "Compare the functional groups found in ibuprofen and aspirin.",
+    "difficulty": "complex",
+    "category": "comparison",
+    "expected_behavior": "Extract and compare the major functional groups between ibuprofen and aspirin.",
+    "expected_tools": [
+      "comparison_tool",
+      "property_extraction",
+      "pubchem_name_search"
+    ]
+  },
+  {
+    "id": 44,
+    "query": "Find compounds with both aromatic amine and carboxylic acid functional groups.",
+    "difficulty": "complex",
+    "category": "structure_filtering",
+    "expected_behavior": "Locate compounds featuring an aromatic amine and a carboxylic acid group using PubChem structural search and filter.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "property_extraction"
+    ]
+  },
+  {
+    "id": 45,
+    "query": "Compare side effects of caffeine and paracetamol with reference to recent studies.",
+    "difficulty": "complex",
+    "category": "comparison",
+    "expected_behavior": "Using PubChem and recent research, summarize and compare the side effect profiles of caffeine and paracetamol.",
+    "expected_tools": [
+      "comparison_tool",
+      "pubchem_name_search"
+    ]
+  },
+  {
+    "id": 46,
+    "query": "List penicillin derivatives with improved oral bioavailability.",
+    "difficulty": "complex",
+    "category": "pharmacology",
+    "expected_behavior": "Identify penicillin derivatives with higher reported oral bioavailability and compare relevant properties.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "property_extraction",
+      "comparison_tool"
+    ]
+  },
+  {
+    "id": 47,
+    "query": "Find safer pain relief alternatives structurally unrelated to NSAIDs.",
+    "difficulty": "complex",
+    "category": "multi_step_reasoning",
+    "expected_behavior": "Recommend non-NSAID painkillers with a lower risk profile than NSAIDs, based on structure and toxicity data.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "toxicity_analysis_tool"
+    ]
+  },
+  {
+    "id": 48,
+    "query": "Compare toxicity and efficacy of beta-lactam vs macrolide antibiotics.",
+    "difficulty": "complex",
+    "category": "comparison",
+    "expected_behavior": "Extract and contrast toxicological and efficacy data between beta-lactam and macrolide antibiotic classes.",
+    "expected_tools": [
+      "comparison_tool",
+      "toxicity_analysis_tool",
+      "pubchem_structure_search"
+    ]
+  },
+  {
+    "id": 49,
+    "query": "Find compounds with a pyridine ring and a logP less than 1.",
+    "difficulty": "complex",
+    "category": "multi_step_reasoning",
+    "expected_behavior": "Search for compounds containing a pyridine ring and filter for those with logP < 1.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "pubchem_property_filter"
+    ]
+  },
+  {
+    "id": 50,
+    "query": "What are the most common functional groups found in beta-lactam antibiotics?",
+    "difficulty": "complex",
+    "category": "structure_filtering",
+    "expected_behavior": "Analyze class-wide data for beta-lactam antibiotics to list typical functional groups and their frequency.",
+    "expected_tools": [
+      "pubchem_structure_search",
+      "property_extraction"
+    ]
+  }
+]
