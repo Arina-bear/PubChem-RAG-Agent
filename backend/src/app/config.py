@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     heavy_query_concurrency: int = 1
     agent_max_steps: int = 10
 
-    llm_default_provider: str = "nvidia"
+    llm_default_provider: str = "mistral"
     openai_base_url: str = "https://api.openai.com/v1"
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4.1-mini"

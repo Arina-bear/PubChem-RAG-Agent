@@ -344,10 +344,45 @@ def build_chat_model(settings: Settings, provider: LLMProviderName | None = None
                 "MISTRAL_API_KEY не настроен.",
                 http_status=500,
             )
+        # Mistral-primary failover: Mistral → NVIDIA → OpenRouter → Gemini.
+        # Order mirrors the NVIDIA-primary branch with the front two
+        # providers swapped — keeps the same NVIDIA NIM / Mistral pair at
+        # the top of the chain regardless of which one is the default.
+        composed: object = raw
+        if settings.llm_enable_fallback:
+            fallback_chain: list[object] = []
+            nvidia_fallback = _build_nvidia_chat_model(settings)
+            if nvidia_fallback is not None:
+                fallback_chain.append(nvidia_fallback)
+            openrouter_fallback = _build_openrouter_chat_model(settings)
+            if openrouter_fallback is not None:
+                fallback_chain.append(openrouter_fallback)
+            if settings.google_api_key is not None:
+                gemini_fallback = ChatGoogleGenerativeAI(
+                    model=settings.gemini_model,
+                    google_api_key=settings.google_api_key.get_secret_value(),
+                    temperature=0,
+                    timeout=settings.llm_request_timeout_seconds,
+                    max_retries=settings.llm_fallback_max_retries,
+                    rate_limiter=get_gemini_rate_limiter(settings),
+                )
+                fallback_chain.append(gemini_fallback)
+            if fallback_chain:
+                composed = raw.with_fallbacks(fallback_chain)
+                fallback_models = []
+                if nvidia_fallback is not None:
+                    fallback_models.append(f"nvidia:{settings.nvidia_model}")
+                if openrouter_fallback is not None:
+                    fallback_models.append(f"openrouter:{settings.openrouter_model}")
+                if settings.google_api_key is not None:
+                    fallback_models.append(f"gemini:{settings.gemini_model}")
+                msg = f"!!! FAILOVER: Mistral chat model wired with fallbacks → {', '.join(fallback_models)}"
+                print(msg)
+                logger.info(msg)
         return ResolvedChatModel(
             provider="mistral",
             model_name=model_name,
-            instance=raw.with_config(RunnableConfig(max_concurrency=1)),
+            instance=composed.with_config(RunnableConfig(max_concurrency=1)),
         )
 
     if resolved_provider == "modal_glm":
