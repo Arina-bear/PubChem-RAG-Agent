@@ -31,7 +31,8 @@ MCP_LOOKUP_MAP = {
     "search_by_smiles_pubchem": "smiles",
     "get_by_cid": "cid",
     "search_by_formula_pubchem": "formula",
-    "search_compound_by_inchikey": "inchikey"
+    "search_compound_by_inchikey": "inchikey",
+    "search_similar_mol_pubchem": "smiles_similar"
 }
 
 class AgentService:

@@ -1,5 +1,5 @@
 from mcp.server.fastmcp import FastMCP
-import requests
+from rdkit import Chem
 import urllib.parse
 from typing import Any
 import httpx
@@ -36,6 +36,7 @@ async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
             props = data['PropertyTable']['Properties'][0]
             return {
                 "cid": cid,
+                "XLogP": props.get('XLogP'),
                 "title": props.get('Title'),
                 "molecular_formula": props.get('MolecularFormula'),
                 "molecular_weight": float(props['MolecularWeight']) if props.get('MolecularWeight') else None
@@ -45,10 +46,12 @@ async def _fetch_props(cid: int, client: httpx.AsyncClient) -> dict:
     
     return {
         "cid": cid,
+        "XLogP": 0,
         "title": f"CID {cid}",
         "molecular_formula": None,
         "molecular_weight": None
     }
+
 
 async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, limit: int) -> dict:
     """Общая логика поиска CID и сбора свойств для всех инструментов."""
@@ -56,7 +59,7 @@ async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, l
         async with global_sem:
             response = await client.get(url, timeout=10.0)
             await asyncio.sleep(0.1)
-        if response.status_code != 200:
+        if response.status_code not in [200,202]:
             return {
                 "ok": False, 
                 "message": f"Запрос '{query_val}' не дал результатов в базе PubChem.", 
@@ -64,6 +67,26 @@ async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, l
             }
 
         data = response.json()
+
+        list_key = data.get("Waiting", {}).get("ListKey")
+        
+        if list_key:
+            status_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/listkey/{list_key}/cids/JSON"
+            max_attempts = 4
+            
+            for attempt in range(max_attempts):
+                await asyncio.sleep(0.1)  
+                
+                async with global_sem:
+                    status_res = await client.get(status_url, timeout=10.0)
+                
+                if status_res.status_code in [200,202]:
+                    data = status_res.json()
+                    break
+
+                elif attempt == max_attempts - 1:
+                    return {"ok": False, "message": "Превышено время ожидания ответа от PubChem.", "matches": []}
+
         cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
         
         if not cid_list:
@@ -93,7 +116,7 @@ async def _perform_search(client: httpx.AsyncClient, url: str, query_val: str, l
 
 # --- TOOLS ---
 
-@mcp.tool(name="search_by_name_pubchem")
+@mcp.tool(name = "search_by_name_pubchem")
 async def search_by_name_pubchem(name: str, limit: int = 5) -> dict:
     clean_name = name.replace(" ", "").strip()
     args = SearchByNameInput(name=clean_name, limit=limit)
@@ -102,7 +125,7 @@ async def search_by_name_pubchem(name: str, limit: int = 5) -> dict:
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/cids/JSON"
         return await _perform_search(client, url, args.name, args.limit)
     
-@mcp.tool(name="search_by_smiles_pubchem")
+@mcp.tool(name = "search_by_smiles_pubchem")
 async def search_by_smiles_pubchem(smiles: str, limit: int = 5) -> dict:
     clean_smiles = smiles.replace(" ", "").strip()
     args = SearchBySMILESInput(smiles = clean_smiles, limit=limit)
@@ -111,7 +134,7 @@ async def search_by_smiles_pubchem(smiles: str, limit: int = 5) -> dict:
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/smiles/{encoded_smiles}/cids/JSON"
         return await _perform_search(client, url, args.smiles, args.limit)
 
-@mcp.tool(name="search_by_formula_pubchem")
+@mcp.tool(name = "search_by_formula_pubchem")
 async def search_by_formula_pubchem(formula: str, limit: int = 5) -> dict:
     clean_formula = formula.replace(" ", "").strip()
     args = SearchByFormulaInput(formula=clean_formula, limit=limit)
@@ -120,7 +143,7 @@ async def search_by_formula_pubchem(formula: str, limit: int = 5) -> dict:
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/{encoded_formula}/cids/JSON"
         return await _perform_search(client, url, args.formula, args.limit)
 
-@mcp.tool(name="search_by_inchikey_pubchem")
+@mcp.tool(name = "search_by_inchikey_pubchem")
 async def search_by_inchikey_pubchem(inchikey: str, limit: int = 5) -> dict:
     clean_inchikey = inchikey.replace(" ", "").strip()
     args = SearchByInChIKeyArgs(inchikey=clean_inchikey, limit=limit)
@@ -128,6 +151,50 @@ async def search_by_inchikey_pubchem(inchikey: str, limit: int = 5) -> dict:
         encoded_inchikey = urllib.parse.quote(args.inchikey)
         url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/inchikey/{encoded_inchikey}/cids/JSON"
         return await _perform_search(client, url, args.inchikey, args.limit)
+    
+
+@mcp.tool(name = "search_similar_mol_pubchem")
+async def search_by_similar_mol_pubchem(smiles: str, threshold: float = 0.75, limit: int = 5) -> dict:
+
+    if not smiles:
+        return {"ok": False, "message": "Ошибка: SMILES не предоставлен"}
+    
+    mol = Chem.MolFromSmiles(smiles)
+
+    if mol is None:
+        return {
+            "ok": False, 
+            "message": f"Ошибка: Некорректный или химически невалидный SMILES: {smiles}"
+        }
+
+    clean_smiles = Chem.MolToSmiles(mol, isomericSmiles = False)
+    
+    args = SearchBySMILESInput(smiles = clean_smiles, limit=limit)
+    perc_threshold = int(threshold * 100)
+
+    async with httpx.AsyncClient(timeout=15) as client:
+     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/similarity/smiles/{clean_smiles}/Threshold={perc_threshold}"
+     return await _perform_search(client, url, args.smiles, args.limit)
+
+@mcp.tool(name="search_substructure_pubchem")
+async def search_substructure_pubchem(smiles: str, limit: int = 5) -> dict:
+    """
+    Поиск соединений, содержащих указанный фрагмент (подструктуру).
+    """
+    if not smiles:
+        return {"ok": False, "message": "Ошибка: SMILES фрагмента не предоставлен"}
+    
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return {"ok": False, "message": f"Ошибка: Невалидный SMILES фрагмента: {smiles}"}
+    
+    clean_smiles = Chem.MolToSmiles(mol, isomericSmiles = False)
+    encoded_smiles = urllib.parse.quote(clean_smiles)
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/substructure/smiles/{encoded_smiles}/JSON"
+        return await _perform_search(client, url, f"substructure of {clean_smiles}", limit)
+    
 #tool 5
 #@mcp.tool()
 #async def search_compound_by_mass_range(
@@ -159,7 +226,7 @@ async def search_by_inchikey_pubchem(inchikey: str, limit: int = 5) -> dict:
            # cid_list = data.get('IdentifierList', {}).get('CID', [])[:limit]
             
           #  if not cid_list:
-           #     return json.dumps({"ok": True, "matches": [], "count": 0})
+           #     return json.dumps({"ok": True, "matches": [], "count": 0})JSON?
 
           #  results = await asyncio.gather(*[_fetch_props(cid, client) for cid in cid_list])
           #  return json.dumps({
